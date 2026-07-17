@@ -1,0 +1,18 @@
+{
+  "name": "gruppetto-sync",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Synchronisation automatique du statut des coureurs (DNS/DNF/DSQ) pour Gruppetto — totalement indépendant de l'application.",
+  "main": "sync.js",
+  "scripts": {
+    "test": "jest",
+    "verify-live": "node tests/verify-live.js"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "firebase-admin": "^12.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0"
+  }
+}

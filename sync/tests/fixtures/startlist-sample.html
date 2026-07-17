@@ -1,0 +1,49 @@
+<!--
+  ⚠️ FIXTURE APPROXIMATIVE — À CONFIRMER AVANT MISE EN PRODUCTION.
+
+  Cette page reproduit la STRUCTURE probable de la startlist PCS (listes
+  imbriquées équipe > coureurs, statut entre parenthèses) à partir du rendu
+  textuel observé pendant le PoC. Je n'ai pas eu accès au DOM brut réel de
+  procyclingstats.com (uniquement à une conversion texte/markdown de la
+  page), donc les noms de classes CSS ci-dessous sont une hypothèse
+  raisonnable, pas une certitude.
+
+  Avant toute synchronisation planifiée : exécuter `npm run verify-live`
+  (voir tests/verify-live.js) sur la vraie page, comparer la sortie à ce
+  qui est attendu, et ajuster les sélecteurs dans PCSDirectProvider.js si
+  besoin. Ce fichier sert à figer le comportement une fois cette
+  vérification faite, pas à la remplacer.
+-->
+<html>
+<body>
+<ul class="startlist_v3">
+  <li>
+    <a href="/team/uae-team-emirates-xrg-2026">UAE Team Emirates - XRG (WT)</a>
+    <ul>
+      <li>1<a href="/rider/tadej-pogacar">POGAČAR Tadej</a></li>
+      <li>2<a href="/rider/isaac-del-toro">DEL TORO Isaac</a></li>
+    </ul>
+  </li>
+  <li>
+    <a href="/team/soudal-quick-step-2026">Soudal Quick-Step (WT)</a>
+    <ul>
+      <li>91<a href="/rider/tim-merlier">MERLIER Tim</a></li>
+      <li>96<a href="/rider/bert-van-lerberghe">VAN LERBERGHE Bert</a> (DNF #6)</li>
+    </ul>
+  </li>
+  <li>
+    <a href="/team/uno-x-mobility-2026">Uno-X Mobility (WT)</a>
+    <ul>
+      <li>121<a href="/rider/tobias-halland-johannessen">JOHANNESSEN Tobias Halland</a></li>
+      <li>127<a href="/rider/torstein-traeen">TRÆEN Torstein</a> (DNS #7)</li>
+    </ul>
+  </li>
+  <li>
+    <a href="/team/team-jayco-alula-2026">Team Jayco AlUla (WT)</a>
+    <ul>
+      <li>116<a href="/rider/kelland-o-brien">O'BRIEN Kelland</a> (OTL #4)</li>
+    </ul>
+  </li>
+</ul>
+</body>
+</html>
