@@ -1,0 +1,16 @@
+{
+  "name": "gruppetto-reference-sync",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Synchronisation ponctuelle des données de référence (équipes, coureurs, nationalités, dossards) pour Gruppetto — indépendant du moteur DNS/DNF (sync/) et du moteur Live (live/), partage certains modules purs déjà testés.",
+  "scripts": {
+    "test": "jest"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "firebase-admin": "^12.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0"
+  }
+}
