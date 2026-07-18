@@ -1,0 +1,39 @@
+name: Synchronisation des données de référence
+
+on:
+  # Déclenchement manuel uniquement — pas de cron, cette synchronisation
+  # est ponctuelle (nouvelle édition, création de compétition, ou mise à
+  # jour manuelle des équipes), pas une surveillance continue.
+  workflow_dispatch:
+    inputs:
+      pcsRaceId:
+        description: "Identifiant PCS de la course (ex. tour-de-france/2026)"
+        required: false
+        default: 'tour-de-france/2026'
+      competitionId:
+        description: "Identifiant Gruppetto de la compétition (ex. tdf-2026)"
+        required: false
+        default: 'tdf-2026'
+
+jobs:
+  reference-sync:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: referenceSync
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Installer les dépendances
+        run: npm install
+
+      - name: Lancer la synchronisation des données de référence
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PCS_RACE_ID: ${{ inputs.pcsRaceId || 'tour-de-france/2026' }}
+          COMPETITION_ID: ${{ inputs.competitionId || 'tdf-2026' }}
+        run: node run.js
