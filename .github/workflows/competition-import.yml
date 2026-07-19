@@ -1,0 +1,52 @@
+name: Import de compétition
+
+on:
+  # Déclenchement manuel uniquement — import ponctuel (création ou mise à
+  # jour d'une compétition), pas une surveillance continue.
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Mode d'import"
+        required: true
+        type: choice
+        options:
+          - import-into-existing
+          - create
+        default: 'import-into-existing'
+      competitionId:
+        description: "Identifiant Gruppetto de la compétition (ex. tdf-2026)"
+        required: false
+        default: 'tdf-2026'
+      pcsRaceSlug:
+        description: "Slug PCS de la course (ex. tour-de-france)"
+        required: false
+        default: 'tour-de-france'
+      pcsRaceYear:
+        description: "Année de la course"
+        required: false
+        default: '2026'
+
+jobs:
+  competition-import:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: competitionImport
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Installer les dépendances
+        run: npm install
+
+      - name: Lancer l'import de compétition
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          MODE: ${{ inputs.mode || 'import-into-existing' }}
+          COMPETITION_ID: ${{ inputs.competitionId || 'tdf-2026' }}
+          PCS_RACE_SLUG: ${{ inputs.pcsRaceSlug || 'tour-de-france' }}
+          PCS_RACE_YEAR: ${{ inputs.pcsRaceYear || '2026' }}
+        run: node run.js
