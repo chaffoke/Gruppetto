@@ -1,0 +1,43 @@
+name: Synchronisation des coureurs
+
+on:
+  schedule:
+    # Passage de nuit : vérification définitive du jour, une fois calme.
+    # 00h15 heure de Paris = 22h15 UTC en été / 23h15 UTC en hiver. Fixé en
+    # été puisque c'est la période d'utilisation réelle.
+    - cron: '15 22 * * *'
+    # Pendant les heures de course : toutes les 30 minutes, pour que les
+    # abandons remontent dans Gruppetto le jour même plutôt que le
+    # lendemain matin. Fenêtre 9h-19h heure de Paris (été = UTC+2) =
+    # 7h-17h UTC, large pour couvrir les étapes longues. Un seul GET vers
+    # la même page déjà utilisée — volume resté très modeste.
+    - cron: '*/30 7-17 * * *'
+  # Déclenchement manuel, pour tester sans attendre le prochain passage.
+  workflow_dispatch:
+    inputs:
+      raceId:
+        description: "Course à synchroniser (ex. tour-de-france/2026)"
+        required: false
+        default: 'tour-de-france/2026'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sync
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Installer les dépendances
+        run: npm install
+
+      - name: Lancer la synchronisation
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SYNC_RACE_ID: ${{ inputs.raceId || 'tour-de-france/2026' }}
+        run: node run.js
