@@ -1,0 +1,9 @@
+{
+  "name": "gruppetto-competition-import",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Import de compétition depuis PCS (structure et étapes uniquement — jamais résultats, Live ou classements). Module indépendant, écrit dans des sous-collections de competitions/{id} déjà existant.",
+  "scripts": { "test": "jest" },
+  "dependencies": { "cheerio": "^1.0.0", "firebase-admin": "^12.0.0" },
+  "devDependencies": { "jest": "^29.0.0" }
+}
