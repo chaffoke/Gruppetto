@@ -7818,6 +7818,17 @@ async function fetchClassificationDoc(competitionId, stageNumber, type) {
   const doc = await db.collection('competitions').doc(competitionId).collection('classifications').doc(`${stageNumber}_${type}`).get();
   return doc.exists ? doc.data() : null;
 }
+/** competitions/{id}/jerseyWearers/{stageNumber} — écrit par results/ (JerseyAssembler), déjà correct pour les
+ * cas de report (ex: le leader du classement points portant déjà le jaune ne porte pas aussi le vert). */
+async function fetchJerseyWearersDoc(competitionId, stageNumber) {
+  try {
+    const doc = await db.collection('competitions').doc(competitionId).collection('jerseyWearers').doc(String(stageNumber)).get();
+    return doc.exists ? doc.data() : null;
+  } catch (e) {
+    return null; // pas bloquant — le classement s'affiche simplement sans icônes de maillot
+  }
+}
+const JERSEY_TYPE_TO_ICON = { general: 'yellow', points: 'green', mountain: 'polka', youth: 'white' };
 
 function resultatsEmptyState(text) {
   return `<div class="fun-stat-placeholder" style="background:var(--asphalt-2); border:1px solid var(--line); border-radius:12px; padding:16px; text-align:center; color:var(--grey); font-size:12.5px;">${text}</div>`;
@@ -7861,6 +7872,20 @@ async function renderResultatsContent() {
     }
     const label = resultatsMode === 'equipes' ? 'Classement par équipes' : 'Classement général';
     metaEl.textContent = doc.lastSynced ? `${label} après ${stageForFetch} étape${stageForFetch > 1 ? 's' : ''} · mis à jour : ${new Date(doc.lastSynced).toLocaleString('fr-FR')}` : `${label} après ${stageForFetch} étape${stageForFetch > 1 ? 's' : ''}`;
+
+    // Maillots portés à ce stade (yellow/green/polka/white) — uniquement
+    // pertinent pour le classement général, jamais pour les équipes.
+    let jerseysByRider = {};
+    if (type === 'general') {
+      const jerseyDoc = await fetchJerseyWearersDoc(competitionId, stageForFetch);
+      (jerseyDoc && jerseyDoc.jerseyWearers ? jerseyDoc.jerseyWearers : []).forEach(jw => {
+        const iconKey = JERSEY_TYPE_TO_ICON[jw.jerseyType];
+        if (!iconKey || !jw.wearerId) return;
+        if (!jerseysByRider[jw.wearerId]) jerseysByRider[jw.wearerId] = [];
+        jerseysByRider[jw.wearerId].push(iconKey);
+      });
+    }
+
     contentEl.innerHTML = doc.standings.slice().sort((a, b) => a.rank - b.rank).map(s => {
       if (type === 'teams') {
         const team = resolveTeamDisplay(s.teamId);
@@ -7870,8 +7895,14 @@ async function renderResultatsContent() {
         </div>`;
       }
       const rider = resolveRiderDisplay(s.riderId);
+      const jerseys = jerseysByRider[s.riderId] || [];
+      const jerseysHtml = jerseys.map(iconKey => jerseyIconHtml(iconKey, 16)).join('');
       return `<div class="team-rider">
-        <div class="rname"><span class="bib-badge">#${s.rank}</span>${rider.flag ? rider.flag + ' ' : ''}${rider.name}</div>
+        <div class="rname" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          <span class="bib-badge">#${s.rank}</span>
+          <span>${rider.flag ? rider.flag + ' ' : ''}${rider.name}</span>
+          ${jerseysHtml}
+        </div>
         <div class="pick-count">${s.time || ''}</div>
       </div>`;
     }).join('');
