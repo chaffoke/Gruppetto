@@ -1045,6 +1045,66 @@
     line-height: 1;
   }
 
+  /* === Zoom plein écran (images de profil d'étape) === */
+  .image-zoom-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.92);
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 200ms ease, visibility 0ms linear 200ms;
+  }
+  .image-zoom-overlay.show {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 200ms ease, visibility 0ms linear 0ms;
+  }
+  .image-zoom-overlay img {
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 10px;
+    display: block;
+    cursor: zoom-in;
+    transition: transform 180ms ease;
+    transform: scale(1);
+  }
+  .image-zoom-overlay img.zoomed { cursor: zoom-out; }
+  .image-zoom-close {
+    position: absolute;
+    top: calc(16px + env(safe-area-inset-top, 0));
+    right: 16px;
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+    border: none;
+    color: var(--blanc);
+    font-size: 16px;
+    z-index: 1;
+  }
+  .zoomable-stage-img { cursor: zoom-in; }
+
+  /* === Recherche globale === */
+  .search-result-group-label {
+    font-size: 10.5px;
+    color: var(--grey);
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 10px 0 4px;
+  }
+  .search-result-group-label:first-child { margin-top: 0; }
+  .global-search-empty {
+    color: var(--grey);
+    font-size: 12.5px;
+    text-align: center;
+    padding: 18px 0;
+  }
+
   /* === Fiche coureur — bottom sheet === */
   .rc-overlay {
     display: flex;
@@ -1346,7 +1406,7 @@
       <button class="header-save-btn" id="headerHelpBtn" onclick="showHelpModal()">
         <span>ℹ️</span>
       </button>
-      <button class="header-save-btn" id="headerSearchBtn" onclick="showToast('🔍 Recherche — bientôt disponible')">
+      <button class="header-save-btn" id="headerSearchBtn" onclick="showSearchModal()">
         <span>🔍</span>
       </button>
       <button class="header-save-btn" id="headerSettingsBtn" style="display:none;" onclick="navigateToView('settings')">
@@ -1636,6 +1696,22 @@
     <button class="btn btn-primary" id="btnSaveComment" style="margin-bottom:8px;">✅ Enregistrer</button>
     <button class="btn btn-secondary" id="btnDeleteComment" style="color:var(--polka); border-color:var(--polka);">🗑️ Supprimer le commentaire</button>
   </div>
+</div>
+
+<div class="modal-overlay" id="searchModal" onclick="if(event.target===this) closeSearchModal()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">🔍 Recherche</div>
+      <button class="modal-close" onclick="closeSearchModal()">✕</button>
+    </div>
+    <input type="text" class="search-box" id="globalSearchInput" placeholder="Coureur ou joueur…" style="margin-bottom:12px;">
+    <div id="globalSearchResults" style="display:flex; flex-direction:column; gap:6px; max-height:55vh; overflow-y:auto;"></div>
+  </div>
+</div>
+
+<div class="image-zoom-overlay" id="imageZoomModal" onclick="if(event.target===this) closeImageZoom()">
+  <button class="image-zoom-close" onclick="closeImageZoom()">✕</button>
+  <img id="imageZoomImg" src="" alt="Profil de l'étape" onclick="toggleImageZoomAt(event)">
 </div>
 
 <datalist id="ridersList"></datalist>
@@ -3467,7 +3543,8 @@ function initHallOfFameScreen() {
  */
 const PLAYER_PROFILE_RETURN = {
   home: { label: '← Mes compétitions', show: () => showHomeScreen() },
-  hallOfFame: { label: '← Hall of Fame', show: () => showHallOfFameScreen() }
+  hallOfFame: { label: '← Hall of Fame', show: () => showHallOfFameScreen() },
+  search: { label: '← Retour', show: () => showCompetitionScreen() }
 };
 
 let playerProfileData = null;
@@ -6130,6 +6207,51 @@ function closeCommentModal() {
   document.getElementById('commentModal').classList.remove('show');
 }
 
+/**
+ * === Zoom plein écran des images de profil d'étape ===
+ * Utilisé pour l'image uploadée par l'admin (stageImageContainer) et pour
+ * le profil PCS auto-importé (importedStageInfoContainer). Tap = zoom vers
+ * le point touché ; re-tap = retour à la taille normale. Volontairement
+ * simple (pas de pan au doigt) : suffisant pour lire un profil d'étape,
+ * pas besoin d'un vrai moteur de pinch-zoom pour ce cas d'usage.
+ */
+let imageZoomedIn = false;
+
+function openImageZoom(src) {
+  if (!src) return;
+  const modal = document.getElementById('imageZoomModal');
+  const img = document.getElementById('imageZoomImg');
+  img.src = src;
+  img.style.transformOrigin = 'center center';
+  img.style.transform = 'scale(1)';
+  img.classList.remove('zoomed');
+  imageZoomedIn = false;
+  modal.classList.add('show');
+}
+
+function closeImageZoom() {
+  document.getElementById('imageZoomModal').classList.remove('show');
+}
+
+function toggleImageZoomAt(e) {
+  const img = document.getElementById('imageZoomImg');
+  if (imageZoomedIn) {
+    img.style.transform = 'scale(1)';
+    img.classList.remove('zoomed');
+    imageZoomedIn = false;
+    return;
+  }
+  const rect = img.getBoundingClientRect();
+  const clientX = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+  const clientY = (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY;
+  const originX = ((clientX - rect.left) / rect.width) * 100;
+  const originY = ((clientY - rect.top) / rect.height) * 100;
+  img.style.transformOrigin = `${Math.max(0, Math.min(100, originX))}% ${Math.max(0, Math.min(100, originY))}%`;
+  img.style.transform = 'scale(2.4)';
+  img.classList.add('zoomed');
+  imageZoomedIn = true;
+}
+
 async function saveCommentFromModal() {
   if (isArchiveReadOnly()) { showToast('📚 Compétition archivée — lecture seule'); closeCommentModal(); return; }
   if (!commentContext) return;
@@ -6343,7 +6465,7 @@ function renderStageImageBox(s, base64, loading) {
 
   if (base64) {
     container.innerHTML = `
-      <img src="${base64}" style="width:100%; border-radius:10px; margin-bottom:8px; display:block;">
+      <img src="${base64}" class="zoomable-stage-img" style="width:100%; border-radius:10px; margin-bottom:8px; display:block;" onclick="openImageZoom(this.src)">
       ${isAdmin ? `<div style="display:flex; gap:8px;">
         <button class="btn btn-secondary" style="margin:0; flex:1;" onclick="document.getElementById('stageImageInput').click()">🖼️ Changer</button>
         <button class="btn btn-secondary" style="margin:0; flex:1; color:var(--polka); border-color:var(--polka);" onclick="deleteStageImage(${s})">🗑️ Supprimer</button>
@@ -7399,6 +7521,102 @@ function initTeamSearch() {
   if (refreshBtn) refreshBtn.addEventListener('click', () => refreshCompetitionImportData({ silent: false }));
 }
 
+/**
+ * === Recherche globale (header 🔍) ===
+ * Remplace l'ancien stub "bientôt disponible". Cherche parmi les coureurs
+ * (CONFIG.teams) et les joueurs (STATE.players) de la compétition ouverte.
+ * Ne dépend d'aucune donnée externe — tout est déjà en mémoire.
+ */
+function showSearchModal() {
+  const modal = document.getElementById('searchModal');
+  const input = document.getElementById('globalSearchInput');
+  input.value = '';
+  renderGlobalSearchResults('');
+  modal.classList.add('show');
+  setTimeout(() => input.focus(), 50); // après la transition d'ouverture, sinon le clavier mobile désynchronise le scroll
+}
+
+function closeSearchModal() {
+  document.getElementById('searchModal').classList.remove('show');
+}
+
+function initGlobalSearch() {
+  const input = document.getElementById('globalSearchInput');
+  if (input) input.addEventListener('input', () => renderGlobalSearchResults(input.value));
+}
+
+function renderGlobalSearchResults(rawQuery) {
+  const results = document.getElementById('globalSearchResults');
+  const query = norm(rawQuery.trim());
+
+  if (!query) {
+    results.innerHTML = `<div class="global-search-empty">Tape le nom d'un coureur ou d'un joueur.</div>`;
+    return;
+  }
+
+  const riderMatches = [];
+  CONFIG.teams.forEach((t, tIdx) => {
+    t.riders.forEach((r, rIdx) => {
+      if (norm(r.surname).indexOf(query) !== -1 || norm(r.first).indexOf(query) !== -1) {
+        riderMatches.push({ ...r, team: t.team, tIdx, rIdx });
+      }
+    });
+  });
+
+  const playerMatches = (STATE.players || []).filter(p => norm(p).indexOf(query) !== -1);
+
+  if (riderMatches.length === 0 && playerMatches.length === 0) {
+    results.innerHTML = `<div class="global-search-empty">🔍 Aucun résultat pour "${rawQuery}".</div>`;
+    return;
+  }
+
+  let html = '';
+
+  if (playerMatches.length > 0) {
+    html += `<div class="search-result-group-label">👤 Joueurs</div>`;
+    html += playerMatches.map(p => `
+      <div class="search-result-row" style="cursor:pointer;" onclick="selectSearchPlayer('${p.replace(/'/g, "\\'")}')">
+        <div style="flex:1; min-width:0;">
+          <div class="srname">${p}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  if (riderMatches.length > 0) {
+    html += `<div class="search-result-group-label">🚴 Coureurs</div>`;
+    html += riderMatches.slice(0, 30).map(r => {
+      const flag = r.nationality ? countryFlagEmoji(r.nationality) : '';
+      const bibBadge = (r.bib !== null && r.bib !== undefined) ? `<span class="bib-badge">#${r.bib}</span>` : '';
+      return `<div class="search-result-row" style="cursor:pointer;" onclick="selectSearchRider('${r.surname.replace(/'/g, "\\'")}')">
+        <div style="flex:1; min-width:0;">
+          <div class="srname">${bibBadge}${flag ? flag + ' ' : ''}${r.surname} <span style="color:var(--grey); font-weight:400;">${r.first}</span></div>
+          <div class="srteam">${r.team}</div>
+        </div>
+      </div>`;
+    }).join('');
+    if (riderMatches.length > 30) {
+      html += `<div class="global-search-empty">+ ${riderMatches.length - 30} autre(s) coureur(s) — précise ta recherche.</div>`;
+    }
+  }
+
+  results.innerHTML = html;
+}
+
+function selectSearchRider(surname) {
+  closeSearchModal();
+  navigateToView('teams');
+  const box = document.getElementById('teamSearch');
+  if (box) {
+    box.value = surname;
+    renderTeams();
+  }
+}
+
+function selectSearchPlayer(playerName) {
+  closeSearchModal();
+  openPlayerProfile(playerName, 'search');
+}
+
 function initClassementToggle() {
   document.querySelectorAll('#classementToggle .toggle-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -7559,7 +7777,7 @@ async function loadAndShowImportedStageInfo(s) {
   container.innerHTML = `
     <div style="background:var(--asphalt-2); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-top:10px;">
       <div style="font-size:10.5px; color:var(--grey); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">📡 Infos PCS importées</div>
-      ${doc.pcsProfileUrl ? `<img src="${doc.pcsProfileUrl}" alt="Profil de l'étape" style="width:100%; border-radius:8px; margin-bottom:6px;">` : ''}
+      ${doc.pcsProfileUrl ? `<img src="${doc.pcsProfileUrl}" alt="Profil de l'étape" class="zoomable-stage-img" style="width:100%; border-radius:8px; margin-bottom:6px;" onclick="openImageZoom(this.src)">` : ''}
       <div style="font-size:12px; color:var(--blanc);">${parts.join(' · ')}</div>
       ${warningHtml}
       ${applyBtnHtml}
@@ -7965,6 +8183,7 @@ async function init() {
   initClassementToggle();
   initResultatsToggle();
   initTeamSearch();
+  initGlobalSearch();
   const syncStagePointsBtn = document.getElementById('btnSyncStagePoints');
   if (syncStagePointsBtn) syncStagePointsBtn.addEventListener('click', () => syncStagePointsFromResults(selectedStage, { silent: false }));
   initTeamsImport();
