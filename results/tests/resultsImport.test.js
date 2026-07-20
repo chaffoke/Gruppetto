@@ -106,6 +106,21 @@ describe('runResultsImport — succès', () => {
     expect(result.warnings.some(w => w.includes('mountain'))).toBe(true);
   });
 
+  test('un provider renvoyant une liste vide (structure rejetée) -> traité comme non disponible, jamais écrit comme classement valide à zéro entrée', async () => {
+    const repo = new FakeResultsRepository({ existingStages: [13] });
+    const withEmptyGeneral = { ...allClassifications, general: [] };
+    const result = await runResultsImport({
+      competitionId: 'tdf-2026', stageNumber: 13,
+      stageResultProvider: fakeStageResultProvider(validResults),
+      classificationProvider: fakeClassificationProvider(withEmptyGeneral),
+      ...identityResolvers, repository: repo, log: silentLog
+    });
+    expect(result.success).toBe(true);
+    expect(result.classificationsImported).toBe(4); // general exclu, pas compté
+    expect(result.warnings.some(w => w.includes('general') && w.includes('non disponible'))).toBe(true);
+    expect(repo.classificationWrites.some(w => w.type === 'general')).toBe(false);
+  });
+
   test('rapport contient tous les champs demandés', async () => {
     const repo = new FakeResultsRepository({ existingStages: [13] });
     const result = await runResultsImport({

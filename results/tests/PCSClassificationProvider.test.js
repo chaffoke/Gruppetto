@@ -4,22 +4,19 @@ const { PCSClassificationProvider } = require('../providers/PCSClassificationPro
 
 const fixtureHtml = fs.readFileSync(path.join(__dirname, 'fixtures/classification-general-sample.html'), 'utf-8');
 
-describe('PCSClassificationProvider.parseClassificationHtml (sur fixture GC réelle)', () => {
+describe('PCSClassificationProvider.parseClassificationHtml — garde-fou structurel', () => {
   const provider = new PCSClassificationProvider();
-  const entries = provider.parseClassificationHtml(fixtureHtml);
 
-  test('récupère les 3 lignes de la fixture', () => {
-    expect(entries).toHaveLength(3);
+  test('cette fixture a en réalité la structure d\'un résultat d\'étape (gc/pnt), pas d\'un vrai classement cumulé (prev/delta) — rejetée, liste vide plutôt qu\'une fausse donnée', () => {
+    const entries = provider.parseClassificationHtml(fixtureHtml);
+    expect(entries).toEqual([]);
   });
 
-  test('le leader du général est correctement identifié', () => {
-    expect(entries[0]).toMatchObject({ rank: 1, pcsRiderSlug: 'tadej-pogacar', pcsTeamSlug: 'uae-team-emirates-xrg-2026', time: '62:14:08' });
-  });
-
-  test('les rangs suivants ont leur écart dans "time"', () => {
-    expect(entries[1].time).toBe('2:32');
-    expect(entries[2].time).toBe('4:01');
-  });
+  // ⚠️ Pas encore de fixture positive confirmée pour un vrai tableau
+  // "prev"/"delta" (classement cumulé général/points/montagne/jeunes) —
+  // à ajouter dès qu'un vrai extrait sera disponible. Ce test négatif
+  // confirme au moins que le garde-fou empêche la corruption silencieuse
+  // déjà constatée en conditions réelles.
 });
 
 describe('PCSClassificationProvider.parseTeamsClassificationHtml (sur fixture réelle)', () => {
@@ -41,6 +38,12 @@ describe('PCSClassificationProvider.parseTeamsClassificationHtml (sur fixture r�
 
   test('dernière équipe classée correcte', () => {
     expect(entries[22].pcsTeamSlug).toBe('team-picnic-postnl-2026');
+  });
+
+  test('un tableau individuel (sans data-code="teamline") est rejeté -> liste vide, jamais de fausse donnée', () => {
+    const individualFixtureHtml = fs.readFileSync(path.join(__dirname, 'fixtures/classification-general-sample.html'), 'utf-8');
+    const bogus = provider.parseTeamsClassificationHtml(individualFixtureHtml);
+    expect(bogus).toEqual([]);
   });
 });
 

@@ -98,6 +98,13 @@ async function runResultsImport({
       continue;
     }
 
+    if (!rawEntries || rawEntries.length === 0) {
+      const w = `Classement "${type}" non disponible (structure attendue non trouvée sur la page).`;
+      report.warnings.push(w);
+      log(`⚠ ${w}`);
+      continue;
+    }
+
     const assembled = assembleClassification(rawEntries, { resolveRiderId, resolveTeamId });
     const classificationValidation = validateClassification(type, assembled);
     classificationValidation.warnings.forEach(w => { report.warnings.push(w); log(`⚠ ${w}`); });

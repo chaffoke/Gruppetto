@@ -52,11 +52,27 @@ class PCSClassificationProvider {
   }
 
   /** Séparée de fetchClassification() pour être testable sur une fixture, sans réseau. */
+  /**
+   * ⚠️ Même défaut structurel que pour les équipes, découvert en
+   * conditions réelles : le tableau récupéré par une simple requête
+   * HTTP sur les URLs -gc/-points/-kom/-youth n'est pas toujours le
+   * vrai classement cumulé — il peut retomber sur le tableau de
+   * résultat d'étape de la même page (colonnes "gc"/"pnt" au lieu de
+   * "prev"/"delta"). Confirmé par une vraie donnée en base : des points
+   * 100/70/50/40 (barème d'étape) et des temps identiques à un résultat
+   * d'étape, sous la clé "classifications/{n}_general". Ce garde-fou
+   * vérifie la présence de data-code="prev" (uniquement sur un vrai
+   * tableau de classement cumulé) avant de parser.
+   */
   parseClassificationHtml(html) {
     const $ = cheerio.load(html);
-    const entries = [];
+    const table = $('table.results').first();
 
-    $('table.results').first().find('tbody > tr').each((_, row) => {
+    const isCumulativeTable = table.find('th[data-code="prev"]').length > 0;
+    if (!isCumulativeTable) return [];
+
+    const entries = [];
+    table.find('tbody > tr').each((_, row) => {
       const $row = $(row);
       const rankRaw = $row.find('> td').first().text().trim();
       if (!/^\d+$/.test(rankRaw)) return; // un classement n'a normalement pas de DNS/DNF listés
@@ -88,11 +104,26 @@ class PCSClassificationProvider {
    * Séparée car la structure diffère réellement de parseClassificationHtml
    * (colonne teamline unique : drapeau + lien équipe, pas de coureur).
    */
+  /**
+   * ⚠️ Confirmé en conditions réelles : le vrai tableau équipe
+   * (data-code="teamline") n'est PAS présent dans une simple requête
+   * HTTP — il est injecté par JavaScript après chargement (visible
+   * seulement via l'inspecteur du navigateur). Une requête HTTP simple
+   * ne reçoit que le tableau individuel de la même page. Ce garde-fou
+   * vérifie qu'on a bien affaire à un tableau équipe avant de le
+   * parser — sinon, on renvoie une liste vide plutôt que d'extraire à
+   * tort une entrée par coureur (bug réel constaté : 166 lignes au lieu
+   * de 23, riderId toujours null mais teamId rempli pour chaque coureur).
+   */
   parseTeamsClassificationHtml(html) {
     const $ = cheerio.load(html);
-    const entries = [];
+    const table = $('table.results').first();
 
-    $('table.results').first().find('tbody > tr').each((_, row) => {
+    const isTeamsTable = table.find('th[data-code="teamline"]').length > 0;
+    if (!isTeamsTable) return [];
+
+    const entries = [];
+    table.find('tbody > tr').each((_, row) => {
       const $row = $(row);
       const tds = $row.find('> td');
       const rankRaw = tds.eq(0).text().trim();
