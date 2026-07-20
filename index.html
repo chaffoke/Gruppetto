@@ -7518,6 +7518,9 @@ async function loadAndShowImportedStageInfo(s) {
 
   const mappedType = mapImportedStageTypeToGruppetto(doc.stageType);
   const currentProfile = CONFIG.stageProfiles && CONFIG.stageProfiles[String(s)];
+  const currentDistance = CONFIG.stageDistances && CONFIG.stageDistances[String(s)];
+  const currentDeadline = CONFIG.stageDeadlines && CONFIG.stageDeadlines[String(s)];
+
   const parts = [];
   if (doc.startCity && doc.finishCity) parts.push(`${doc.startCity} → ${doc.finishCity}`);
   if (doc.distanceKm) parts.push(`${doc.distanceKm} km`);
@@ -7527,8 +7530,30 @@ async function loadAndShowImportedStageInfo(s) {
     parts.push(`départ ${t}`);
   }
 
-  const applyBtnHtml = (isAdmin && mappedType && currentProfile !== mappedType)
-    ? `<button class="btn btn-secondary" style="margin-top:6px; font-size:11.5px; padding:6px 10px;" onclick="applyImportedStageProfile(${s}, '${mappedType}')">Utiliser ce profil PCS (${STAGE_PROFILE_LABELS[mappedType]})</button>`
+  // Écarts avec la saisie manuelle — sur les 3 champs, pas seulement le
+  // profil. Découvert en conditions réelles : un horaire manuel obsolète
+  // (12:30) coexistant silencieusement avec le vrai horaire importé
+  // (13:00), sans qu'aucun signal ne prévienne — CONFIG.stageDeadlines
+  // pilote pourtant réellement la fermeture des pronostics.
+  const discrepancies = [];
+  if (mappedType && currentProfile !== mappedType) {
+    discrepancies.push(`profil (${currentProfile ? STAGE_PROFILE_LABELS[currentProfile] : 'non classé'} → ${STAGE_PROFILE_LABELS[mappedType]})`);
+  }
+  if (doc.distanceKm && currentDistance && Math.abs(currentDistance - doc.distanceKm) > 0.1) {
+    discrepancies.push(`distance (${currentDistance} km → ${doc.distanceKm} km)`);
+  }
+  if (doc.officialStartTime && currentDeadline && new Date(doc.officialStartTime).getTime() !== new Date(currentDeadline).getTime()) {
+    const importedT = new Date(doc.officialStartTime).toLocaleString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const currentT = new Date(currentDeadline).toLocaleString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    discrepancies.push(`horaire (${currentT} → ${importedT})`);
+  }
+
+  const warningHtml = discrepancies.length > 0
+    ? `<div style="background:rgba(232,66,90,0.12); border:1px solid rgba(232,66,90,0.35); border-radius:8px; padding:8px 10px; margin-top:6px; font-size:11px; color:var(--polka);">⚠️ Écart avec la saisie manuelle : ${discrepancies.join(', ')}</div>`
+    : '';
+
+  const applyBtnHtml = (isAdmin && discrepancies.length > 0)
+    ? `<button class="btn btn-secondary" style="margin-top:6px; font-size:11.5px; padding:6px 10px;" onclick="applyImportedStageData(${s})">Aligner sur les données PCS</button>`
     : '';
 
   container.innerHTML = `
@@ -7536,17 +7561,35 @@ async function loadAndShowImportedStageInfo(s) {
       <div style="font-size:10.5px; color:var(--grey); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">📡 Infos PCS importées</div>
       ${doc.pcsProfileUrl ? `<img src="${doc.pcsProfileUrl}" alt="Profil de l'étape" style="width:100%; border-radius:8px; margin-bottom:6px;">` : ''}
       <div style="font-size:12px; color:var(--blanc);">${parts.join(' · ')}</div>
+      ${warningHtml}
       ${applyBtnHtml}
     </div>`;
 }
 
-async function applyImportedStageProfile(s, mappedType) {
+async function applyImportedStageData(s) {
   if (!isAdmin) return;
-  if (!CONFIG.stageProfiles) CONFIG.stageProfiles = {};
-  CONFIG.stageProfiles[String(s)] = mappedType;
+  if (!db || !currentCompetition || !currentCompetition.id) return;
+  const doc = await fetchImportedStageDoc(currentCompetition.id, s);
+  if (!doc) return;
+
+  const mappedType = mapImportedStageTypeToGruppetto(doc.stageType);
+  if (mappedType) {
+    if (!CONFIG.stageProfiles) CONFIG.stageProfiles = {};
+    CONFIG.stageProfiles[String(s)] = mappedType;
+  }
+  if (doc.distanceKm) {
+    if (!CONFIG.stageDistances) CONFIG.stageDistances = {};
+    CONFIG.stageDistances[String(s)] = doc.distanceKm;
+  }
+  if (doc.officialStartTime) {
+    if (!CONFIG.stageDeadlines) CONFIG.stageDeadlines = {};
+    CONFIG.stageDeadlines[String(s)] = doc.officialStartTime;
+  }
+
   await saveConfig();
   renderStageInfoCard(s);
-  showToast(`Profil de l'étape ${s} mis à jour : ${STAGE_PROFILE_LABELS[mappedType]}`);
+  renderDeadlineBox(s);
+  showToast(`Étape ${s} alignée sur les données PCS`);
 }
 
 async function fetchStageResultsDoc(competitionId, stageNumber) {
