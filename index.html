@@ -1745,6 +1745,7 @@
   <div style="padding: 16px 18px;">
     <div class="section-label" style="margin-top:0;" id="playerProfileTitle">Joueur</div>
     <div class="toggle-row" id="playerProfileToggle">
+      <button class="toggle-btn" data-mode="saison">🗓️ Saison</button>
       <button class="toggle-btn active" data-mode="career">📈 Carrière</button>
       <button class="toggle-btn" data-mode="palmares">🏆 Palmarès</button>
       <button class="toggle-btn" data-mode="history">📅 Historique</button>
@@ -2464,6 +2465,44 @@ function legacyDocRef() {
 }
 function competitionDocRefById(id) {
   return db.collection('competitions').doc(id);
+}
+
+/**
+ * === Notifications — point d'émission unique (architecture, pas de livraison) ===
+ * Aujourd'hui : consigne l'événement dans Firestore, rien de plus. Aucune
+ * notification n'est réellement envoyée à personne — c'est volontaire, le
+ * vrai système de livraison (service worker + FCM + tokens par appareil +
+ * préférences par joueur) est un chantier à part, pas encore fait.
+ *
+ * Ce qui compte MAINTENANT : que chaque endroit du code qui produit un
+ * événement "notifiable" appelle CETTE fonction, avec un `type` de la liste
+ * ci-dessous — jamais un `showToast()` isolé qui ne laisserait aucune trace
+ * exploitable plus tard. Le jour où la livraison réelle sera branchée,
+ * SEUL le corps de cette fonction changera (ex: appeler une Cloud Function
+ * qui lit les préférences et pousse via FCM) — aucun site d'appel ailleurs
+ * dans l'app n'aura à bouger.
+ *
+ * Types actuellement émis : 'sync_completed', 'important_abandon'.
+ * Types prévus mais pas encore émis (aucun trigger fiable identifié pour
+ * l'instant, à brancher plus tard sans changer cette fonction) :
+ *   'deadline_approaching' (fermeture des pronostics dans 30 min),
+ *   'results_available' (résultats d'étape fraîchement importés),
+ *   'new_leader' (changement de maillot jaune/vert/pois/blanc).
+ *
+ * @param {string} type
+ * @param {Object} payload - libre, propre à chaque type (ex: { stageNumber, riderName })
+ */
+async function emitNotifiableEvent(type, payload = {}) {
+  if (!db || !currentCompetition || !currentCompetition.id) return;
+  try {
+    await competitionDocRef().collection('notificationEvents').add({
+      type,
+      payload,
+      createdAt: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error('emitNotifiableEvent: écriture impossible (non bloquant)', type, e);
+  }
 }
 
 /**
@@ -3550,10 +3589,12 @@ const PLAYER_PROFILE_RETURN = {
 let playerProfileData = null;
 let playerProfileMode = 'career';
 let playerProfileReturn = PLAYER_PROFILE_RETURN.home;
+let currentPlayerProfileName = null;
 
 async function openPlayerProfile(playerName, source = 'home') {
   playerProfileReturn = PLAYER_PROFILE_RETURN[source] || PLAYER_PROFILE_RETURN.home;
   document.getElementById('btnBackToHomeFromPlayer').textContent = playerProfileReturn.label;
+  currentPlayerProfileName = playerName;
 
   let summary = hallOfFameSummary;
   if (!summary) {
@@ -3564,12 +3605,17 @@ async function openPlayerProfile(playerName, source = 'home') {
 
   const key = norm(playerName);
   playerProfileData = summary.players.find(p => norm(p.displayName) === key) || null;
-  playerProfileMode = 'career';
+
+  // Un joueur de la compétition ouverte n'a souvent aucune carrière
+  // archivée à afficher (cas typique : Tour en cours). Priorité à
+  // "Saison" dans ce cas plutôt qu'un écran "profil introuvable".
+  const isInCurrentCompetition = STATE && Array.isArray(STATE.players) && STATE.players.includes(playerName);
+  playerProfileMode = isInCurrentCompetition ? 'saison' : 'career';
 
   document.getElementById('playerProfileTitle').textContent = playerProfileData ? playerProfileData.displayName : playerName;
   document.querySelectorAll('#playerProfileToggle .toggle-btn').forEach(b => b.classList.remove('active'));
-  const careerBtn = document.querySelector('#playerProfileToggle .toggle-btn[data-mode="career"]');
-  if (careerBtn) careerBtn.classList.add('active');
+  const activeBtn = document.querySelector(`#playerProfileToggle .toggle-btn[data-mode="${playerProfileMode}"]`);
+  if (activeBtn) activeBtn.classList.add('active');
 
   renderPlayerProfileContent();
   showPlayerProfileScreen();
@@ -3591,6 +3637,11 @@ function renderPlayerProfileContent() {
   const container = document.getElementById('playerProfileContent');
   if (!container) return;
 
+  if (playerProfileMode === 'saison') {
+    renderPlayerSeasonContent(container);
+    return;
+  }
+
   if (!playerProfileData) {
     container.innerHTML = emptyStateHtml({ icon: '👤', title: 'Profil introuvable', text: "Ce joueur n'a pas encore de compétition archivée." });
     return;
@@ -3602,6 +3653,142 @@ function renderPlayerProfileContent() {
     case 'career':
     default: container.innerHTML = renderPlayerCareerHtml(playerProfileData); break;
   }
+}
+
+/**
+ * === Fiche joueur — Saison (compétition en cours) ===
+ * Distincte de renderPlayerCareerHtml : celle-ci ne regarde AUCUNE
+ * compétition archivée, uniquement STATE/CONFIG de la compétition
+ * actuellement ouverte — donc pertinente dès la première étape d'un
+ * Tour en cours, sans attendre une archive.
+ * S'appuie exclusivement sur des briques déjà autonomes et déjà
+ * utilisées ailleurs (cumulativeTotalFromData, rankAt, fetchJerseyWearersDoc,
+ * findRiderByPick) : aucun nouveau calcul de score dupliqué.
+ */
+async function renderPlayerSeasonContent(container) {
+  const playerName = currentPlayerProfileName;
+  const inCompetition = STATE && Array.isArray(STATE.players) && STATE.players.includes(playerName);
+
+  if (!inCompetition) {
+    container.innerHTML = emptyStateHtml({ icon: '🗓️', title: 'Pas dans cette compétition', text: "Ce joueur ne participe pas à la compétition actuellement ouverte." });
+    return;
+  }
+
+  const lastStage = lastCompleteStage();
+  if (lastStage === 0) {
+    container.innerHTML = emptyStateHtml({ icon: '🗓️', title: 'Saison pas encore commencée', text: "Aucune étape validée pour l'instant." });
+    return;
+  }
+
+  container.innerHTML = `
+    ${skeletonHtml({ height: '120px', radius: '12px', style: 'margin-bottom:10px;' })}
+    ${skeletonHtml({ height: '80px', radius: '12px' })}
+  `;
+
+  const stagesPlayed = [];
+  for (let s = 1; s <= lastStage; s++) {
+    const d = STATE.data[playerName] && STATE.data[playerName][String(s)];
+    if (d && d.points !== null && d.points !== undefined && d.points !== '') {
+      stagesPlayed.push({ stage: s, points: Number(d.points), pick: d.pick || null });
+    }
+  }
+
+  // Si l'écran a changé de joueur/compétition pendant les lectures Firestore
+  // ci-dessous, on abandonne silencieusement — évite d'écraser un autre
+  // écran déjà affiché entretemps.
+  const requestedFor = playerName;
+
+  let jerseyStagesCount = 0;
+  const jerseyTypesHeld = new Set();
+  if (currentCompetition && currentCompetition.id) {
+    const jerseyDocs = await Promise.all(
+      stagesPlayed.map(sp => sp.pick ? fetchJerseyWearersDoc(currentCompetition.id, sp.stage) : Promise.resolve(null))
+    );
+    if (currentPlayerProfileName !== requestedFor) return; // changement entretemps
+    stagesPlayed.forEach((sp, i) => {
+      const doc = jerseyDocs[i];
+      if (!doc || !doc.jerseyWearers || !sp.pick) return;
+      const rider = findRiderByPick(sp.pick);
+      if (!rider) return;
+      const riderKey = rider.pcsSlug || rider.id;
+      let heldAny = false;
+      doc.jerseyWearers.forEach(jw => {
+        if (jw.wearerId === riderKey) {
+          heldAny = true;
+          const iconKey = JERSEY_TYPE_TO_ICON[jw.jerseyType];
+          if (iconKey) jerseyTypesHeld.add(iconKey);
+        }
+      });
+      if (heldAny) jerseyStagesCount++;
+    });
+  }
+
+  if (currentPlayerProfileName !== requestedFor) return;
+
+  if (stagesPlayed.length === 0) {
+    container.innerHTML = emptyStateHtml({ icon: '🗓️', text: 'Aucun pronostic joué pour l\'instant.', compact: true });
+    return;
+  }
+
+  const wins = stagesPlayed.filter(sp => sp.points === 1).length;
+  const top3Count = stagesPlayed.filter(sp => sp.points <= 3).length;
+  const top3Pct = Math.round((top3Count / stagesPlayed.length) * 100);
+  const best = stagesPlayed.reduce((a, b) => a.points <= b.points ? a : b);
+  const worst = stagesPlayed.reduce((a, b) => a.points >= b.points ? a : b);
+  const average = stagesPlayed.reduce((sum, sp) => sum + sp.points, 0) / stagesPlayed.length;
+  const currentRank = rankAt(lastStage).ranks[playerName];
+  const streak = computeCurrentStreak(playerName, lastStage);
+
+  const streakHtml = streak
+    ? `<div class="fun-stat-placeholder" style="background:${streak.direction === 'up' ? 'rgba(47,158,110,0.14)' : 'rgba(232,66,90,0.14)'}; border:1px solid ${streak.direction === 'up' ? 'var(--vert)' : 'var(--polka)'}; border-radius:12px; padding:12px 14px; margin-bottom:10px; font-size:13px; font-weight:700; color:${streak.direction === 'up' ? 'var(--vert)' : 'var(--polka)'};">
+        ${streak.direction === 'up' ? '🔥' : '📉'} ${streak.count} étape${streak.count > 1 ? 's' : ''} de suite en ${streak.direction === 'up' ? 'progression' : 'recul'} au classement
+      </div>`
+    : '';
+
+  const jerseysHtml = jerseyTypesHeld.size > 0
+    ? `<div style="display:flex; align-items:center; gap:6px; padding:4px 0; font-size:13px;">
+        <span style="color:var(--grey); flex:1;">Maillots portés</span>
+        <span style="display:flex; gap:4px;">${Array.from(jerseyTypesHeld).map(k => jerseyIconHtml(k, 18)).join('')}</span>
+      </div>`
+    : `<div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Maillots portés</span><span style="font-weight:700;">—</span></div>`;
+
+  container.innerHTML = `
+    ${streakHtml}
+    <div class="fun-stat-placeholder" style="background:var(--asphalt-2); border:1px solid var(--line); border-radius:12px; padding:14px;">
+      <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Classement actuel</span><span style="font-weight:700;">${currentRank ? (currentRank === 1 ? '🥇 1er' : `${currentRank}e`) : '—'}</span></div>
+      <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Étapes jouées</span><span style="font-weight:700;">${stagesPlayed.length} / ${lastStage}</span></div>
+      <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Victoires d'étape pronostiquées</span><span style="font-weight:700;">${wins}</span></div>
+      <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Top 3 trouvés</span><span style="font-weight:700;">${top3Count} (${top3Pct}%)</span></div>
+      <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Meilleur score</span><span style="font-weight:700;">${best.points} pt${best.points > 1 ? 's' : ''} <span style="color:var(--grey); font-weight:400;">(É${best.stage})</span></span></div>
+      <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Pire score</span><span style="font-weight:700;">${worst.points} pts <span style="color:var(--grey); font-weight:400;">(É${worst.stage})</span></span></div>
+      <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Moyenne par étape</span><span style="font-weight:700;">${average.toFixed(1)} pts</span></div>
+      ${jerseysHtml}
+    </div>
+  `;
+}
+
+/**
+ * Série en cours (progression/recul consécutifs au classement Gruppetto,
+ * pas un seuil arbitraire de points) — même logique que les flèches ▲▼
+ * déjà affichées ailleurs dans le classement, appliquée dans le temps
+ * plutôt qu'à une seule étape.
+ */
+function computeCurrentStreak(player, lastStage) {
+  if (lastStage < 2) return null;
+  let direction = null;
+  let count = 0;
+  for (let s = lastStage; s >= 2; s--) {
+    const rCurr = rankAt(s).ranks[player];
+    const rPrev = rankAt(s - 1).ranks[player];
+    if (rCurr === undefined || rPrev === undefined) break;
+    const delta = rPrev - rCurr; // positif = progression (rang plus petit = mieux)
+    if (delta === 0) break;
+    const dir = delta > 0 ? 'up' : 'down';
+    if (direction === null) direction = dir;
+    if (dir !== direction) break;
+    count++;
+  }
+  return count > 0 ? { direction, count } : null;
 }
 
 function renderPlayerCareerHtml(profile) {
@@ -5577,6 +5764,24 @@ async function syncAbandonStatusesFromPCS({ silent = false } = {}) {
     await saveConfig();
     renderAll();
     showToast(`${updatedCount} statut(s) mis à jour depuis PCS`);
+
+    // "Important" ici = un favori PCS (top coureurs suivis) qui abandonne —
+    // pas chaque changement de statut mineur, sinon le futur flux de
+    // notifications serait noyé sous du bruit dès le premier abandon venu.
+    CONFIG.teams.forEach(team => {
+      team.riders.forEach(rider => {
+        if (rider.status && rider.status !== 'finished' && rider.abandonedAtStage) {
+          const isFavorite = PCS_FAVORITES.some(f => f.pcsSlug === rider.pcsSlug);
+          if (isFavorite) {
+            emitNotifiableEvent('important_abandon', {
+              riderName: `${rider.first} ${rider.surname}`.trim(),
+              status: rider.status,
+              stage: rider.abandonedAtStage
+            });
+          }
+        }
+      });
+    });
   } else if (!silent) {
     showToast('Aucun nouveau statut à mettre à jour.');
   }
@@ -5639,6 +5844,7 @@ async function refreshCompetitionImportData({ silent = false } = {}) {
     PCS_FAVORITES = favorites;
     renderAll();
     if (!silent) showToast(`${teams.length} maillot(s) d'équipe, ${favorites.length} favori(s) — mis à jour`);
+    emitNotifiableEvent('sync_completed', { source: 'competitionImport', teamsCount: teams.length, favoritesCount: favorites.length });
   } catch (e) {
     console.error('refreshCompetitionImportData: lecture Firestore échouée', e);
     if (!silent) showToast('Actualisation impossible — voir la console.');
