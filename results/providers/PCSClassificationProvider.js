@@ -13,17 +13,21 @@ const cheerio = require('cheerio');
  * INDIVIDUELS (general/points/mountain/youth) — même gabarit que
  * PCSStageResultProvider (table.results, td.ridername, td.cu600 a[href]).
  *
- * Classement "teams" — structure CONFIRMÉE (data-code="teamline"),
- * vérifiée via l'inspecteur du navigateur sur le DOM réellement rendu.
+ * Classement "teams" — structure CONFIRMÉE (data-code="teamline").
  *
- * ⚠️ Point d'incertitude réel, à confirmer par un vrai test : ce
- * contenu n'était PAS présent dans un premier "voir le code source" de
- * cette même URL — seulement visible via l'inspecteur (DOM après
- * rendu). Il est possible qu'une simple requête HTTP sans exécution
- * JavaScript (ce que fait ce provider) ne le reçoive pas. Si un import
- * réel échoue ou renvoie une liste vide pour "teams" alors que la page
- * existe bien, ce sera la confirmation qu'il faut une approche
- * différente (navigateur automatisé), pas un défaut de sélecteur.
+ * ⚠️ CAUSE RÉELLE identifiée et corrigée le 20/07/2026 (étape 15, via
+ * navigateur headless + logs enrichis) : ce n'est PAS un problème de
+ * JS non exécuté ni de données non encore publiées par PCS. Les pages
+ * -gc/-points/-kom/-youth/-teams-gc contiennent chacune ~14
+ * `table.results` (la table de résultat d'étape, plusieurs filtres/vues
+ * annexes, puis la vraie table cumulée/équipes). La table cumulée
+ * (data-code="prev") était systématiquement en position 1, jamais 0 ;
+ * la table équipes (data-code="teamline") en position 12. Prendre
+ * `.first()` retombait donc toujours sur la table de résultat d'étape
+ * (169 lignes), d'où le retour [] pour les 5 classements malgré des
+ * données bien présentes et complètes côté PCS. Corrigé en cherchant
+ * explicitement, parmi toutes les table.results, celle qui contient le
+ * data-code attendu — plutôt que de supposer sa position.
  */
 class PCSClassificationProvider {
   constructor({ fetchImpl = globalThis.fetch, userAgent = 'Gruppetto-ResultsImport/1.0 (usage personnel non commercial)', log = console.log } = {}) {
@@ -63,38 +67,33 @@ class PCSClassificationProvider {
 
   /** Séparée de fetchClassification() pour être testable sur une fixture, sans réseau. */
   /**
-   * ⚠️ Même défaut structurel que pour les équipes, découvert en
-   * conditions réelles : le tableau récupéré par une simple requête
-   * HTTP sur les URLs -gc/-points/-kom/-youth n'est pas toujours le
-   * vrai classement cumulé — il peut retomber sur le tableau de
-   * résultat d'étape de la même page (colonnes "gc"/"pnt" au lieu de
-   * "prev"/"delta"). Confirmé par une vraie donnée en base : des points
-   * 100/70/50/40 (barème d'étape) et des temps identiques à un résultat
-   * d'étape, sous la clé "classifications/{n}_general". Ce garde-fou
-   * vérifie la présence de data-code="prev" (uniquement sur un vrai
-   * tableau de classement cumulé) avant de parser.
+   * Le tableau récupéré n'est pas toujours le vrai classement cumulé —
+   * il peut retomber sur le tableau de résultat d'étape de la même page
+   * (colonnes "gc"/"pnt" au lieu de "prev"/"delta") si on prend la
+   * mauvaise `table.results` (cf. commentaire d'en-tête de la classe).
+   * Ce garde-fou vérifie la présence de data-code="prev" (uniquement sur
+   * un vrai tableau de classement cumulé) et sélectionne explicitement
+   * CETTE table-là parmi toutes les table.results de la page, avant de
+   * parser.
    */
   parseClassificationHtml(html) {
     const $ = cheerio.load(html);
     const allResultsTables = $('table.results');
-    const table = allResultsTables.first();
 
-    const isCumulativeTable = table.find('th[data-code="prev"]').length > 0;
+    // ⚠️ CORRECTIF (confirmé en conditions réelles le 20/07/2026) : les
+    // pages -gc/-points/-kom/-youth contiennent PLUSIEURS table.results
+    // (jusqu'à 14 sur une page d'étape du Tour), dont la table de résultat
+    // d'étape elle-même, systématiquement en position 0. La vraie table
+    // cumulée (data-code="prev") n'est PAS forcément la première -> on la
+    // cherche explicitement au lieu de supposer qu'elle est .first().
+    const table = allResultsTables.filter((_, t) => $(t).find('th[data-code="prev"]').length > 0).first();
+    const isCumulativeTable = table.length > 0;
 
-    // --- Diagnostic enrichi (ne change aucun comportement) ---
-    this.log(`[DIAG classement general] ${allResultsTables.length} table(s) "table.results" trouvée(s) sur la page`);
+    // --- Diagnostic enrichi (ne change aucun comportement de retour) ---
+    this.log(`[DIAG classement general] ${allResultsTables.length} table(s) "table.results" trouvée(s) sur la page, table cumulée ${isCumulativeTable ? 'trouvée' : 'ABSENTE'}`);
 
     if (!isCumulativeTable) {
-      // La table cumulée existe peut-être ailleurs dans le DOM, ignorée par
-      // .first() -> distingue "aucune table cumulée nulle part" de
-      // "mauvaise table sélectionnée".
-      const cumulativeIndex = allResultsTables.toArray().findIndex(t => $(t).find('th[data-code="prev"]').length > 0);
-      const tbody = table.find('tbody');
-      this.log(
-        `[DIAG classement general] table.first() SANS data-code="prev" -> parser arrêté ici. ` +
-        `Table cumulée présente ailleurs dans le DOM (ignorée par .first()) ? index=${cumulativeIndex} (${cumulativeIndex === -1 ? 'aucune trouvée nulle part' : 'OUI, table #' + cumulativeIndex + ' sur ' + allResultsTables.length}). ` +
-        `Table retenue (#0) : tbody ${tbody.length === 0 ? 'ABSENT' : `présent, ${tbody.find('> tr').length} <tr> dedans`}.`
-      );
+      this.log(`[DIAG classement general] aucune table.results ne contient data-code="prev" -> aucun classement cumulé publié pour cette page.`);
       return [];
     }
 
@@ -136,33 +135,30 @@ class PCSClassificationProvider {
    * (colonne teamline unique : drapeau + lien équipe, pas de coureur).
    */
   /**
-   * ⚠️ Confirmé en conditions réelles : le vrai tableau équipe
-   * (data-code="teamline") n'est PAS présent dans une simple requête
-   * HTTP — il est injecté par JavaScript après chargement (visible
-   * seulement via l'inspecteur du navigateur). Une requête HTTP simple
-   * ne reçoit que le tableau individuel de la même page. Ce garde-fou
-   * vérifie qu'on a bien affaire à un tableau équipe avant de le
-   * parser — sinon, on renvoie une liste vide plutôt que d'extraire à
-   * tort une entrée par coureur (bug réel constaté : 166 lignes au lieu
-   * de 23, riderId toujours null mais teamId rempli pour chaque coureur).
+   * Le vrai tableau équipe (data-code="teamline") coexiste avec ~13
+   * autres table.results sur la page -teams-gc (cf. commentaire d'en-tête
+   * de la classe). Ce garde-fou sélectionne explicitement la table qui
+   * contient ce data-code, plutôt que .first() — sinon on retombe sur le
+   * tableau de résultat d'étape individuel et on renvoie une liste vide
+   * plutôt que d'extraire à tort une entrée par coureur (bug réel
+   * constaté : 166 lignes au lieu de 23, riderId toujours null mais
+   * teamId rempli pour chaque coureur).
    */
   parseTeamsClassificationHtml(html) {
     const $ = cheerio.load(html);
     const allResultsTables = $('table.results');
-    const table = allResultsTables.first();
 
-    const isTeamsTable = table.find('th[data-code="teamline"]').length > 0;
+    // ⚠️ CORRECTIF (confirmé en conditions réelles le 20/07/2026) : même
+    // défaut que parseClassificationHtml -- la page -teams-gc contient 14
+    // table.results, la vraie table équipes (data-code="teamline") est en
+    // position 12, jamais 0. On la cherche explicitement.
+    const table = allResultsTables.filter((_, t) => $(t).find('th[data-code="teamline"]').length > 0).first();
+    const isTeamsTable = table.length > 0;
 
-    this.log(`[DIAG classement teams] ${allResultsTables.length} table(s) "table.results" trouvée(s) sur la page`);
+    this.log(`[DIAG classement teams] ${allResultsTables.length} table(s) "table.results" trouvée(s) sur la page, table équipes ${isTeamsTable ? 'trouvée' : 'ABSENTE'}`);
 
     if (!isTeamsTable) {
-      const teamsIndex = allResultsTables.toArray().findIndex(t => $(t).find('th[data-code="teamline"]').length > 0);
-      const tbody = table.find('tbody');
-      this.log(
-        `[DIAG classement teams] table.first() SANS data-code="teamline" -> parser arrêté ici. ` +
-        `Table équipes présente ailleurs dans le DOM (ignorée par .first()) ? index=${teamsIndex} (${teamsIndex === -1 ? 'aucune trouvée nulle part' : 'OUI, table #' + teamsIndex + ' sur ' + allResultsTables.length}). ` +
-        `Table retenue (#0) : tbody ${tbody.length === 0 ? 'ABSENT' : `présent, ${tbody.find('> tr').length} <tr> dedans`}.`
-      );
+      this.log(`[DIAG classement teams] aucune table.results ne contient data-code="teamline" -> classement équipes non publié pour cette page.`);
       return [];
     }
 
