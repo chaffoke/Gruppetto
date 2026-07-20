@@ -33,6 +33,16 @@
  * autres signaux habituels de détection headless (navigator.webdriver,
  * empreintes Chrome DevTools Protocol, etc.) — solution standard pour
  * ce type de blocage, pas une improvisation.
+ * ⚠️ Confirmé en conditions réelles : le correctif User-Agent + stealth
+ * a bien éliminé le 403. Nouveau problème constaté : le vrai tableau
+ * n'apparaît toujours pas dans le délai imparti. Piste corrigée ici :
+ * "networkidle2" se contente de 2 connexions réseau actives — les
+ * nombreuses requêtes publicitaires/analytics déjà repérées sur PCS
+ * peuvent maintenir ce niveau indéfiniment, faisant considérer la page
+ * "chargée" avant même que le vrai contenu (chargé en dernier,
+ * potentiellement après le reste) n'ait eu le temps d'arriver.
+ * "networkidle0" (zéro connexion active) et un délai plus long
+ * devraient laisser plus de marge.
  */
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -67,7 +77,7 @@ async function closeBrowser() {
  * @param {{ waitForSelector?: string, timeoutMs?: number, userAgent?: string, delayMs?: number }} options
  * @returns {(url: string, fetchOptions?: object) => Promise<{ ok: boolean, status: number, text: () => Promise<string> }>}
  */
-function createBrowserFetch({ waitForSelector: defaultWaitForSelector = 'table.results', timeoutMs = 20000, userAgent, delayMs = 4000 } = {}) {
+function createBrowserFetch({ waitForSelector: defaultWaitForSelector = 'table.results', timeoutMs = 30000, userAgent, delayMs = 4000 } = {}) {
   let callCount = 0;
 
   return async function browserFetchImpl(url, fetchOptions = {}) {
@@ -83,7 +93,7 @@ function createBrowserFetch({ waitForSelector: defaultWaitForSelector = 'table.r
     callCount++;
 
     const page = await getPage(ua);
-    const response = await page.goto(url, { waitUntil: 'networkidle2', timeout: timeoutMs });
+    const response = await page.goto(url, { waitUntil: 'networkidle0', timeout: timeoutMs });
     const status = response ? response.status() : 0;
     const ok = response ? response.ok() : false;
 
