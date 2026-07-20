@@ -1,0 +1,47 @@
+name: Import des résultats d'étape
+
+on:
+  # Déclenchement manuel uniquement — après qu'une étape soit terminée,
+  # pas une surveillance continue.
+  workflow_dispatch:
+    inputs:
+      competitionId:
+        description: "Identifiant Gruppetto de la compétition (ex. tdf-2026)"
+        required: false
+        default: 'tdf-2026'
+      stageNumber:
+        description: "Numéro de l'étape à importer (ex. 13)"
+        required: true
+      pcsRaceSlug:
+        description: "Slug PCS de la course (ex. tour-de-france)"
+        required: false
+        default: 'tour-de-france'
+      pcsRaceYear:
+        description: "Année de la course"
+        required: false
+        default: '2026'
+
+jobs:
+  results-import:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: results
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Installer les dépendances
+        run: npm install
+
+      - name: Lancer l'import des résultats d'étape
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          COMPETITION_ID: ${{ inputs.competitionId || 'tdf-2026' }}
+          STAGE_NUMBER: ${{ inputs.stageNumber }}
+          PCS_RACE_SLUG: ${{ inputs.pcsRaceSlug || 'tour-de-france' }}
+          PCS_RACE_YEAR: ${{ inputs.pcsRaceYear || '2026' }}
+        run: node run.js
