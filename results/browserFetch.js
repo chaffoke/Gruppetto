@@ -93,14 +93,38 @@ function createBrowserFetch({ waitForSelector: defaultWaitForSelector = 'table.r
     callCount++;
 
     const page = await getPage(ua);
+
+    // Diagnostic temporaire : voir ce qui se passe réellement dans le
+    // navigateur pendant ce run — erreurs JS, requêtes échouées —
+    // plutôt que de continuer à deviner un correctif sans preuve.
+    page.removeAllListeners('console');
+    page.removeAllListeners('requestfailed');
+    page.removeAllListeners('pageerror');
+    page.on('console', msg => console.log(`[DIAG navigateur][${msg.type()}]`, msg.text()));
+    page.on('pageerror', err => console.log('[DIAG erreur JS page]', err.message));
+    page.on('requestfailed', req => console.log('[DIAG requête échouée]', req.url(), '-', req.failure() ? req.failure().errorText : '?'));
+
     const response = await page.goto(url, { waitUntil: 'networkidle0', timeout: timeoutMs });
     const status = response ? response.status() : 0;
     const ok = response ? response.ok() : false;
+    console.log(`[DIAG] navigation vers ${url} -> statut ${status}`);
 
     if (ok && waitForSelector) {
       try {
         await page.waitForSelector(waitForSelector, { timeout: timeoutMs });
+        console.log(`[DIAG] sélecteur "${waitForSelector}" trouvé pour ${url}`);
       } catch (e) {
+        console.log(`[DIAG] sélecteur "${waitForSelector}" JAMAIS trouvé pour ${url} (délai dépassé)`);
+        try {
+          const resTabCount = await page.evaluate(() => document.querySelectorAll('div.resTab').length);
+          const resTabHtml = await page.evaluate(() => {
+            const el = document.querySelector('#resultsCont');
+            return el ? el.innerHTML.length : -1;
+          });
+          console.log(`[DIAG] nombre de div.resTab présents dans le DOM : ${resTabCount} | taille HTML de #resultsCont : ${resTabHtml} caractères`);
+        } catch (evalErr) {
+          console.log('[DIAG] impossible d\'inspecter le DOM après l\'échec :', evalErr.message);
+        }
         // Le sélecteur n'est jamais apparu — on renvoie quand même le HTML
         // tel quel, PCSClassificationProvider détectera lui-même
         // l'absence de la vraie structure (data-code="prev"/"teamline")
