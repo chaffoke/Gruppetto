@@ -26,10 +26,11 @@ const cheerio = require('cheerio');
  * différente (navigateur automatisé), pas un défaut de sélecteur.
  */
 class PCSClassificationProvider {
-  constructor({ fetchImpl = globalThis.fetch, userAgent = 'Gruppetto-ResultsImport/1.0 (usage personnel non commercial)' } = {}) {
+  constructor({ fetchImpl = globalThis.fetch, userAgent = 'Gruppetto-ResultsImport/1.0 (usage personnel non commercial)', log = console.log } = {}) {
     this.name = 'pcs-classification';
     this.fetchImpl = fetchImpl;
     this.userAgent = userAgent;
+    this.log = log; // instrumentation diagnostique uniquement — n'affecte pas le comportement du parser
   }
 
   async fetchClassification(pcsRaceSlug, year, stageNumber, type) {
@@ -75,20 +76,39 @@ class PCSClassificationProvider {
    */
   parseClassificationHtml(html) {
     const $ = cheerio.load(html);
-    const table = $('table.results').first();
+    const allResultsTables = $('table.results');
+    const table = allResultsTables.first();
 
     const isCumulativeTable = table.find('th[data-code="prev"]').length > 0;
-    if (!isCumulativeTable) return [];
+
+    // --- Diagnostic enrichi (ne change aucun comportement) ---
+    this.log(`[DIAG classement general] ${allResultsTables.length} table(s) "table.results" trouvée(s) sur la page`);
+
+    if (!isCumulativeTable) {
+      // La table cumulée existe peut-être ailleurs dans le DOM, ignorée par
+      // .first() -> distingue "aucune table cumulée nulle part" de
+      // "mauvaise table sélectionnée".
+      const cumulativeIndex = allResultsTables.toArray().findIndex(t => $(t).find('th[data-code="prev"]').length > 0);
+      const tbody = table.find('tbody');
+      this.log(
+        `[DIAG classement general] table.first() SANS data-code="prev" -> parser arrêté ici. ` +
+        `Table cumulée présente ailleurs dans le DOM (ignorée par .first()) ? index=${cumulativeIndex} (${cumulativeIndex === -1 ? 'aucune trouvée nulle part' : 'OUI, table #' + cumulativeIndex + ' sur ' + allResultsTables.length}). ` +
+        `Table retenue (#0) : tbody ${tbody.length === 0 ? 'ABSENT' : `présent, ${tbody.find('> tr').length} <tr> dedans`}.`
+      );
+      return [];
+    }
 
     const entries = [];
+    let rejectedRows = 0;
+    const totalRows = table.find('tbody > tr').length;
     table.find('tbody > tr').each((_, row) => {
       const $row = $(row);
       const rankRaw = $row.find('> td').first().text().trim();
-      if (!/^\d+$/.test(rankRaw)) return; // un classement n'a normalement pas de DNS/DNF listés
+      if (!/^\d+$/.test(rankRaw)) { rejectedRows++; return; } // un classement n'a normalement pas de DNS/DNF listés
 
       const riderLink = $row.find('td.ridername a[href^="rider/"]').first();
       const pcsRiderSlug = riderLink.attr('href') ? riderLink.attr('href').replace('rider/', '') : null;
-      if (!pcsRiderSlug) return;
+      if (!pcsRiderSlug) { rejectedRows++; return; }
 
       const teamLink = $row.find('td.cu600 a[href^="team/"]').first();
       const pcsTeamSlug = teamLink.attr('href') ? teamLink.attr('href').replace('team/', '') : null;
@@ -105,6 +125,8 @@ class PCSClassificationProvider {
         points: pntText ? parseInt(pntText, 10) : null
       });
     });
+
+    this.log(`[DIAG classement general] tbody trouvé : ${totalRows} <tr>, ${entries.length} ligne(s) reconnue(s) comme classement valide, ${rejectedRows} rejetée(s) (rang non numérique ou coureur non résolu)`);
 
     return entries;
   }
@@ -126,21 +148,36 @@ class PCSClassificationProvider {
    */
   parseTeamsClassificationHtml(html) {
     const $ = cheerio.load(html);
-    const table = $('table.results').first();
+    const allResultsTables = $('table.results');
+    const table = allResultsTables.first();
 
     const isTeamsTable = table.find('th[data-code="teamline"]').length > 0;
-    if (!isTeamsTable) return [];
+
+    this.log(`[DIAG classement teams] ${allResultsTables.length} table(s) "table.results" trouvée(s) sur la page`);
+
+    if (!isTeamsTable) {
+      const teamsIndex = allResultsTables.toArray().findIndex(t => $(t).find('th[data-code="teamline"]').length > 0);
+      const tbody = table.find('tbody');
+      this.log(
+        `[DIAG classement teams] table.first() SANS data-code="teamline" -> parser arrêté ici. ` +
+        `Table équipes présente ailleurs dans le DOM (ignorée par .first()) ? index=${teamsIndex} (${teamsIndex === -1 ? 'aucune trouvée nulle part' : 'OUI, table #' + teamsIndex + ' sur ' + allResultsTables.length}). ` +
+        `Table retenue (#0) : tbody ${tbody.length === 0 ? 'ABSENT' : `présent, ${tbody.find('> tr').length} <tr> dedans`}.`
+      );
+      return [];
+    }
 
     const entries = [];
+    let rejectedRows = 0;
+    const totalRows = table.find('tbody > tr').length;
     table.find('tbody > tr').each((_, row) => {
       const $row = $(row);
       const tds = $row.find('> td');
       const rankRaw = tds.eq(0).text().trim();
-      if (!/^\d+$/.test(rankRaw)) return;
+      if (!/^\d+$/.test(rankRaw)) { rejectedRows++; return; }
 
       const teamLink = $row.find('a[href^="team/"]').first();
       const pcsTeamSlug = teamLink.attr('href') ? teamLink.attr('href').replace('team/', '') : null;
-      if (!pcsTeamSlug) return;
+      if (!pcsTeamSlug) { rejectedRows++; return; }
 
       const timeHidden = $row.find('td.time .hide').first().text().trim();
 
@@ -152,6 +189,8 @@ class PCSClassificationProvider {
         points: null
       });
     });
+
+    this.log(`[DIAG classement teams] tbody trouvé : ${totalRows} <tr>, ${entries.length} ligne(s) reconnue(s) comme classement valide, ${rejectedRows} rejetée(s)`);
 
     return entries;
   }
