@@ -1,0 +1,9 @@
+{
+  "name": "gruppetto-results",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Import des résultats officiels d'étape et des classements (GC, points, montagne, jeunes, équipes) depuis PCS. Module indépendant, enrichit competitions/{id} déjà existant. Maillots dérivés des classements, jamais stockés séparément.",
+  "scripts": { "test": "jest" },
+  "dependencies": { "cheerio": "^1.0.0", "firebase-admin": "^12.0.0", "puppeteer": "^22.0.0" },
+  "devDependencies": { "jest": "^29.0.0" }
+}
