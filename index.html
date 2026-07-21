@@ -1088,6 +1088,82 @@
   }
   .zoomable-stage-img { cursor: zoom-in; }
 
+  /* ================================================================
+   * === Système de cartes "référence UI" (Livraison 4 — profil) ===
+   * Pensé pour être réutilisé tel quel par les futures pages
+   * (résultats, classements, équipes, mini-jeu) — un seul langage.
+   * ================================================================ */
+  .profile-macro-section { margin: 28px 0 14px; padding-top: 20px; border-top: 1px solid var(--line); }
+  .profile-macro-section:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+  .profile-macro-title {
+    font-family: var(--font-display); font-size: 15px; letter-spacing: 0.3px;
+    color: var(--blanc); display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  }
+  .profile-subsection-title {
+    font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--grey); margin: 14px 0 7px;
+  }
+  .profile-subsection-title:first-child { margin-top: 0; }
+
+  .profile-card {
+    background: var(--asphalt-2); border: 1px solid var(--line); border-radius: 14px;
+    padding: 15px 16px; margin-bottom: 10px;
+    transition: transform 160ms ease, box-shadow 160ms ease;
+  }
+  .profile-card:active { transform: scale(0.99); }
+  @media (hover: hover) {
+    .profile-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.28); }
+  }
+  .profile-card-header {
+    display: flex; align-items: center; gap: 7px;
+    font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--grey); margin-bottom: 10px;
+  }
+  .profile-row {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+    padding: 6px 0; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .profile-row:last-child { border-bottom: none; }
+  .profile-row .label { color: var(--grey); flex-shrink: 0; }
+  .profile-row .value { font-weight: 700; text-align: right; }
+
+  /* Avatar hero — Identité */
+  .profile-hero { display: flex; align-items: center; gap: 14px; padding-bottom: 4px; }
+  .profile-hero-avatar {
+    width: 84px; height: 84px; border-radius: 20px; background: var(--asphalt-3);
+    display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+  }
+  .profile-hero-avatar img { width: 100%; height: 100%; object-fit: contain; padding: 8px; }
+  .profile-hero-name { font-family: var(--font-display); font-size: 19px; color: var(--blanc); margin-bottom: 6px; }
+  .profile-badge-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--asphalt-3); border: 1px solid var(--line);
+    color: var(--grey); font-size: 11px; font-weight: 600;
+    padding: 4px 9px; border-radius: 20px; margin: 3px 5px 0 0;
+  }
+
+  /* Timeline — récit, pas une liste */
+  .profile-timeline { position: relative; padding-left: 18px; }
+  .profile-timeline::before { content: ''; position: absolute; left: 4px; top: 6px; bottom: 6px; width: 2px; background: var(--line); }
+  .timeline-item { position: relative; padding: 9px 0 9px 16px; display: flex; gap: 10px; align-items: flex-start; }
+  .timeline-item::before {
+    content: ''; position: absolute; left: -18px; top: 15px; width: 10px; height: 10px; border-radius: 50%;
+    background: var(--asphalt-2); border: 2px solid var(--grey); box-sizing: border-box;
+  }
+  .timeline-item.importance-major::before { border-color: var(--jaune); background: var(--jaune); }
+  .timeline-item.importance-medium::before { border-color: var(--vert); }
+  .timeline-item.importance-low::before { border-color: var(--grey); }
+  .timeline-item .ti-stage { font-family: var(--font-mono); font-size: 10px; color: var(--grey); flex-shrink: 0; width: 26px; padding-top: 2px; }
+  .timeline-item .ti-icon { font-size: 15px; flex-shrink: 0; }
+  .timeline-item .ti-text { font-size: 13px; flex: 1; padding-top: 1px; }
+
+  /* Apparition en cascade — respecte prefers-reduced-motion nativement (la keyframe n'existe pas sinon) */
+  @media (prefers-reduced-motion: no-preference) {
+    .anim-in { animation: profileFadeUp 380ms ease both; }
+    @keyframes profileFadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  }
+
   /* === Recherche globale === */
   .search-result-group-label {
     font-size: 10.5px;
@@ -1409,6 +1485,9 @@
       <button class="header-save-btn" id="headerSearchBtn" onclick="showSearchModal()">
         <span>🔍</span>
       </button>
+      <button class="header-save-btn" id="headerMyProfileBtn" onclick="openMyProfile()">
+        <span>🪪</span>
+      </button>
       <button class="header-save-btn" id="headerSettingsBtn" style="display:none;" onclick="navigateToView('settings')">
         <span>⚙️</span>
       </button>
@@ -1714,6 +1793,41 @@
   <img id="imageZoomImg" src="" alt="Profil de l'étape" onclick="toggleImageZoomAt(event)">
 </div>
 
+<div class="modal-overlay" id="playerIdentityModal" onclick="if(event.target===this) closePlayerIdentityModal()">
+  <div class="modal-box" style="max-height:85vh; overflow-y:auto;">
+    <div class="modal-header">
+      <div class="modal-title">✏️ Mon profil</div>
+      <button class="modal-close" onclick="closePlayerIdentityModal()">✕</button>
+    </div>
+
+    <div class="section-label" style="margin-top:0;">🎽 Avatar</div>
+    <input type="text" class="search-box" id="avatarSearchInput" placeholder="Rechercher une équipe…" style="margin-bottom:10px;">
+    <div id="avatarGrid" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; max-height:220px; overflow-y:auto; margin-bottom:16px;"></div>
+
+    <div class="section-label">⭐ Préférences</div>
+    <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:14px;">
+      <div>
+        <label style="font-size:11.5px; color:var(--grey); display:block; margin-bottom:4px;">Équipe favorite</label>
+        <select id="prefFavoriteTeam" class="search-box" style="width:100%;"></select>
+      </div>
+      <div>
+        <label style="font-size:11.5px; color:var(--grey); display:block; margin-bottom:4px;">Coureur préféré</label>
+        <input type="text" id="prefFavoriteRider" class="search-box" list="ridersList" placeholder="Nom du coureur…" style="width:100%;">
+      </div>
+      <div>
+        <label style="font-size:11.5px; color:var(--grey); display:block; margin-bottom:4px;">Type d'étape préféré</label>
+        <select id="prefStageType" class="search-box" style="width:100%;"></select>
+      </div>
+      <div>
+        <label style="font-size:11.5px; color:var(--grey); display:block; margin-bottom:4px;">Profil de coureur préféré</label>
+        <select id="prefRiderProfile" class="search-box" style="width:100%;"></select>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="btnSavePlayerIdentity">✅ Enregistrer</button>
+  </div>
+</div>
+
 <datalist id="ridersList"></datalist>
 <input type="file" id="stageImageInput" accept="image/*" style="display:none;">
 </div>
@@ -1743,9 +1857,10 @@
 <div id="playerProfileRoot" style="display:none;">
   <button id="btnBackToHomeFromPlayer" style="display:block; width:100%; background:var(--asphalt-2); border:none; border-bottom:1px solid var(--line); color:var(--grey); font-size:12.5px; font-weight:700; padding:9px; text-align:left; padding-left:16px;">← Mes compétitions</button>
   <div style="padding: 16px 18px;">
-    <div class="section-label" style="margin-top:0;" id="playerProfileTitle">Joueur</div>
+    <div class="section-label" style="margin-top:0; display:none;" id="playerProfileTitle">Joueur</div>
+    <div id="playerIdentityHeader"></div>
     <div class="toggle-row" id="playerProfileToggle">
-      <button class="toggle-btn" data-mode="saison">🗓️ Saison</button>
+      <button class="toggle-btn" data-mode="saison">🚴 Saison</button>
       <button class="toggle-btn active" data-mode="career">📈 Carrière</button>
       <button class="toggle-btn" data-mode="palmares">🏆 Palmarès</button>
       <button class="toggle-btn" data-mode="history">📅 Historique</button>
@@ -2603,6 +2718,126 @@ const CompetitionRepository = {
 
   async list() {
     return CompetitionRegistry.list();
+  }
+};
+
+/**
+ * === PlayerIdentityRepository (Livraison 3) ===
+ * Collection Firestore GLOBALE `players/{playerId}` — indépendante de
+ * toute compétition, contrairement à STATE (scope compétition). Un joueur
+ * garde son avatar/ses préférences d'une édition du Tour à l'autre.
+ *
+ * playerId = norm(nom du joueur) : même clé de normalisation que le Hall
+ * of Fame utilise déjà pour unifier un même joueur à travers plusieurs
+ * compétitions (cf. computeHallOfFameSummary) — cohérent avec l'existant,
+ * pas une nouvelle convention.
+ *
+ * Structure volontairement en sections, certaines vides aujourd'hui, pour
+ * accueillir facilement de nouveaux champs plus tard SANS jamais casser
+ * les documents déjà écrits (chaque lecture fusionne avec des défauts) :
+ *   - profile      : réservé (bio, pays, couleur favorite, réseaux sociaux…)
+ *   - preferences  : équipe/coureur favoris, type d'étape/profil préférés
+ *   - cosmetics    : avatarTeamId — INDÉPENDANT de preferences.favoriteTeamId
+ *   - statistics   : réservé (agrégats globaux multi-compétitions futurs)
+ *   - achievements : badges, `{ clé: booléen }` — voir ACHIEVEMENT_CATALOG
+ */
+const PlayerIdentityRepository = {
+  playerId(playerName) { return norm(playerName); },
+
+  defaultDoc() {
+    return {
+      profile: {},
+      preferences: {
+        favoriteTeamId: null,
+        favoriteRiderId: null,
+        preferredStageType: null,
+        preferredRiderProfile: null
+      },
+      cosmetics: { avatarTeamId: null },
+      statistics: {},
+      achievements: {}
+    };
+  },
+
+  /** Fusionne un doc (potentiellement partiel/ancien) avec les défauts — jamais de `undefined` qui casse un affichage. */
+  withDefaults(data) {
+    const def = this.defaultDoc();
+    return {
+      profile: { ...def.profile, ...(data.profile || {}) },
+      preferences: { ...def.preferences, ...(data.preferences || {}) },
+      cosmetics: { ...def.cosmetics, ...(data.cosmetics || {}) },
+      statistics: { ...def.statistics, ...(data.statistics || {}) },
+      achievements: { ...def.achievements, ...(data.achievements || {}) }
+    };
+  },
+
+  async get(playerName) {
+    if (!db) return this.defaultDoc();
+    try {
+      const doc = await db.collection('players').doc(this.playerId(playerName)).get();
+      return doc.exists ? this.withDefaults(doc.data()) : this.defaultDoc();
+    } catch (e) {
+      console.error('PlayerIdentityRepository.get error', e);
+      return this.defaultDoc();
+    }
+  },
+
+  /**
+   * `partial` : un sous-ensemble de sections à mettre à jour, ex.
+   * `{ cosmetics: { avatarTeamId: 'ineos' } }`. `merge:true` au niveau
+   * Firestore ET fusion manuelle des sous-clés — modifier `cosmetics` ne
+   * doit JAMAIS effacer `preferences` ni `achievements` écrits ailleurs.
+   */
+  async save(playerName, partial) {
+    if (!db) return false;
+    try {
+      const current = await this.get(playerName);
+      const merged = { ...current };
+      Object.keys(partial).forEach(section => {
+        merged[section] = { ...current[section], ...partial[section] };
+      });
+      await db.collection('players').doc(this.playerId(playerName)).set(merged, { merge: true });
+      return true;
+    } catch (e) {
+      console.error('PlayerIdentityRepository.save error', e);
+      return false;
+    }
+  }
+};
+
+/**
+ * === Fondation des badges (Livraison 3) ===
+ * Catalogue + calcul PUR, dans la même philosophie que
+ * PlayerStatisticsCalculator : aucun accès Firestore ici, aucun affichage.
+ * Volontairement minimal aujourd'hui — seuls les badges directement et
+ * sans ambiguïté déductibles des stats déjà calculées sont évalués
+ * automatiquement. Les autres (perfect_stage, legend_2026...) sont dans
+ * le catalogue pour que la STRUCTURE existe déjà, mais leur règle de
+ * déblocage n'est pas encore définie : les inventer maintenant serait
+ * coder une hypothèse non demandée. `computed:false` = à définir plus tard.
+ */
+const ACHIEVEMENT_CATALOG = {
+  first_stage_win:  { label: 'Première victoire', icon: '🥇', computed: true },
+  yellow_jersey:    { label: 'Maillot jaune porté', icon: '🟡', computed: true },
+  green_jersey:     { label: 'Maillot vert porté', icon: '🟢', computed: true },
+  polka_jersey:     { label: 'Maillot à pois porté', icon: '⚪', computed: true },
+  white_jersey:     { label: 'Maillot blanc porté', icon: '⚪', computed: true },
+  king_of_mountains: { label: 'Roi de la montagne (maillot à pois)', icon: '⛰️', computed: true },
+  perfect_stage:    { label: 'Étape parfaite', icon: '💎', computed: false },
+  legend_2026:      { label: 'Légende du Tour 2026', icon: '👑', computed: false }
+};
+const AchievementCalculator = {
+  /** Retourne uniquement les clés `computed:true` — jamais d'invention de règle pour les autres. */
+  evaluate(stats) {
+    if (!stats) return {};
+    return {
+      first_stage_win: stats.wins > 0,
+      yellow_jersey: !!stats.daysByType.yellow,
+      green_jersey: !!stats.daysByType.green,
+      polka_jersey: !!stats.daysByType.polka,
+      white_jersey: !!stats.daysByType.white,
+      king_of_mountains: !!stats.daysByType.polka
+    };
   }
 };
 
@@ -3583,13 +3818,170 @@ function initHallOfFameScreen() {
 const PLAYER_PROFILE_RETURN = {
   home: { label: '← Mes compétitions', show: () => showHomeScreen() },
   hallOfFame: { label: '← Hall of Fame', show: () => showHallOfFameScreen() },
-  search: { label: '← Retour', show: () => showCompetitionScreen() }
+  search: { label: '← Retour', show: () => showCompetitionScreen() },
+  classement: { label: '← Classement', show: () => showCompetitionScreen() },
+  myProfile: { label: '← Retour', show: () => showCompetitionScreen() }
 };
 
 let playerProfileData = null;
 let playerProfileMode = 'career';
 let playerProfileReturn = PLAYER_PROFILE_RETURN.home;
 let currentPlayerProfileName = null;
+
+/**
+ * === Identité joueur — Livraison 3 (avatar + préférences) ===
+ * Valeurs volontairement en dur ici (pas de configuration externe) : ce
+ * sont des catégories métier du cyclisme, stables, pas des données PCS —
+ * différent des maillots d'équipe qui eux viennent de Firestore.
+ */
+const STAGE_TYPE_OPTIONS = [
+  { value: '', label: 'Aucune préférence' },
+  { value: 'mountain', label: '⛰️ Montagne' },
+  { value: 'flat', label: '🏁 Plaine' },
+  { value: 'hilly', label: '🌄 Vallonnée' },
+  { value: 'itt', label: '⏱️ Contre-la-montre' }
+];
+const RIDER_PROFILE_OPTIONS = [
+  { value: '', label: 'Aucune préférence' },
+  { value: 'climber', label: '🧗 Grimpeur' },
+  { value: 'sprinter', label: '💨 Sprinteur' },
+  { value: 'puncheur', label: '⚡ Puncheur' },
+  { value: 'rouleur', label: '🚴 Rouleur' },
+  { value: 'baroudeur', label: '🎯 Baroudeur' },
+  { value: 'allrounder', label: '🔄 Polyvalent' }
+];
+
+/**
+ * En-tête d'identité affiché au-dessus des onglets Saison/Succès/Carrière —
+ * indépendant du mode sélectionné, donc rendu à part de
+ * renderPlayerProfileContent(). Visible pour tout le monde ; le bouton
+ * "Modifier" n'apparaît que sur SON PROPRE profil (comparaison avec
+ * currentUser.name, la seule notion d'identité que l'app connaît déjà).
+ */
+async function renderPlayerIdentityHeader() {
+  const container = document.getElementById('playerIdentityHeader');
+  if (!container || !currentPlayerProfileName) return;
+  const playerName = currentPlayerProfileName;
+
+  const identity = await PlayerIdentityRepository.get(playerName);
+  if (currentPlayerProfileName !== playerName) return; // le joueur affiché a changé pendant la lecture
+
+  const avatarTeam = identity.cosmetics.avatarTeamId ? PCS_TEAM_JERSEYS.find(t => t.id === identity.cosmetics.avatarTeamId) : null;
+  const avatarHtml = (avatarTeam && avatarTeam.jersey && avatarTeam.jersey.url)
+    ? `<img src="${avatarTeam.jersey.url}" alt="${avatarTeam.name}">`
+    : `<span style="font-size:34px;">👤</span>`;
+
+  const tags = [];
+  if (identity.preferences.favoriteTeamId) tags.push(`🚴 ${identity.preferences.favoriteTeamId}`);
+  if (identity.preferences.favoriteRiderId) tags.push(`👤 ${identity.preferences.favoriteRiderId}`);
+  const stageOpt = STAGE_TYPE_OPTIONS.find(o => o.value === identity.preferences.preferredStageType);
+  if (stageOpt && stageOpt.value) tags.push(stageOpt.label);
+  const profileOpt = RIDER_PROFILE_OPTIONS.find(o => o.value === identity.preferences.preferredRiderProfile);
+  if (profileOpt && profileOpt.value) tags.push(profileOpt.label);
+
+  const tagsHtml = tags.length > 0
+    ? tags.map(t => `<span class="profile-badge-chip">${t}</span>`).join('')
+    : `<span style="font-size:11.5px; color:var(--grey);">Aucune préférence renseignée</span>`;
+
+  const isOwnProfile = currentUser && currentUser.name && norm(currentUser.name) === norm(playerName);
+  const editBtnHtml = isOwnProfile
+    ? `<button onclick="openPlayerIdentityModal('${playerName.replace(/'/g, "\\'")}')" style="background:var(--asphalt-3); border:1px solid var(--line); color:var(--blanc); border-radius:8px; padding:6px 10px; font-size:11.5px; font-weight:700; flex-shrink:0; align-self:flex-start;">✏️ Modifier</button>`
+    : '';
+
+  container.innerHTML = profileSectionHtml('👤', 'Identité', `
+    <div class="profile-card profile-hero">
+      <div class="profile-hero-avatar">${avatarHtml}</div>
+      <div style="flex:1; min-width:0;">
+        <div class="profile-hero-name">${playerName}</div>
+        <div>${tagsHtml}</div>
+      </div>
+      ${editBtnHtml}
+    </div>
+  `);
+  animateProfileCards(container);
+}
+
+let editingIdentityPlayerName = null;
+let selectedAvatarTeamId = null; // état temporaire de la modale — appliqué seulement au clic "Enregistrer"
+
+function renderAvatarGrid(query) {
+  const grid = document.getElementById('avatarGrid');
+  const q = norm(query || '');
+  const list = PCS_TEAM_JERSEYS.filter(t => !q || norm(t.name).indexOf(q) !== -1);
+  if (list.length === 0) {
+    grid.innerHTML = emptyStateHtml({ icon: '🎽', text: "Aucun maillot d'équipe importé pour cette compétition. Importe les équipes depuis Réglages.", compact: true });
+    return;
+  }
+  grid.innerHTML = list.map(t => {
+    const selected = selectedAvatarTeamId === t.id;
+    const url = (t.jersey && t.jersey.url) || '';
+    return `<div onclick="selectAvatarTeam('${t.id}')" style="cursor:pointer; border:2px solid ${selected ? 'var(--jaune)' : 'var(--line)'}; border-radius:10px; padding:6px; text-align:center; background:var(--asphalt-3);">
+      ${url ? `<img src="${url}" alt="${t.name}" style="width:100%; aspect-ratio:1; object-fit:contain;">` : `<div style="width:100%; aspect-ratio:1; display:flex; align-items:center; justify-content:center; font-size:20px;">🎽</div>`}
+      <div style="font-size:9px; color:var(--grey); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${t.name}</div>
+    </div>`;
+  }).join('');
+}
+
+function selectAvatarTeam(teamId) {
+  selectedAvatarTeamId = teamId;
+  renderAvatarGrid(document.getElementById('avatarSearchInput').value);
+}
+
+/** L'avatar (cosmetics.avatarTeamId) n'a aucun rapport avec preferences.favoriteTeamId — un joueur peut arborer INEOS en avatar tout en ayant Visma comme équipe favorite. */
+async function openPlayerIdentityModal(playerName) {
+  editingIdentityPlayerName = playerName;
+  const identity = await PlayerIdentityRepository.get(playerName);
+  selectedAvatarTeamId = identity.cosmetics.avatarTeamId;
+
+  document.getElementById('avatarSearchInput').value = '';
+  renderAvatarGrid('');
+
+  const teamSelect = document.getElementById('prefFavoriteTeam');
+  teamSelect.innerHTML = '<option value="">Aucune</option>' + CONFIG.teams.map(t => `<option value="${t.team}">${t.team}</option>`).join('');
+  teamSelect.value = identity.preferences.favoriteTeamId || '';
+
+  document.getElementById('prefFavoriteRider').value = identity.preferences.favoriteRiderId || '';
+
+  const stageTypeSelect = document.getElementById('prefStageType');
+  stageTypeSelect.innerHTML = STAGE_TYPE_OPTIONS.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+  stageTypeSelect.value = identity.preferences.preferredStageType || '';
+
+  const riderProfileSelect = document.getElementById('prefRiderProfile');
+  riderProfileSelect.innerHTML = RIDER_PROFILE_OPTIONS.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+  riderProfileSelect.value = identity.preferences.preferredRiderProfile || '';
+
+  document.getElementById('playerIdentityModal').classList.add('show');
+}
+
+function closePlayerIdentityModal() {
+  document.getElementById('playerIdentityModal').classList.remove('show');
+}
+
+async function savePlayerIdentityFromModal() {
+  if (!editingIdentityPlayerName) return;
+  const favoriteTeamId = document.getElementById('prefFavoriteTeam').value || null;
+  const favoriteRiderId = document.getElementById('prefFavoriteRider').value.trim() || null;
+  const preferredStageType = document.getElementById('prefStageType').value || null;
+  const preferredRiderProfile = document.getElementById('prefRiderProfile').value || null;
+
+  const ok = await PlayerIdentityRepository.save(editingIdentityPlayerName, {
+    cosmetics: { avatarTeamId: selectedAvatarTeamId },
+    preferences: { favoriteTeamId, favoriteRiderId, preferredStageType, preferredRiderProfile }
+  });
+
+  if (ok) {
+    showToast('✅ Profil mis à jour');
+    closePlayerIdentityModal();
+    renderPlayerIdentityHeader();
+  } else {
+    showToast('Enregistrement impossible — voir la console.');
+  }
+}
+
+function initPlayerIdentityModal() {
+  document.getElementById('avatarSearchInput').addEventListener('input', (e) => renderAvatarGrid(e.target.value));
+  document.getElementById('btnSavePlayerIdentity').addEventListener('click', savePlayerIdentityFromModal);
+}
 
 async function openPlayerProfile(playerName, source = 'home') {
   playerProfileReturn = PLAYER_PROFILE_RETURN[source] || PLAYER_PROFILE_RETURN.home;
@@ -3618,7 +4010,29 @@ async function openPlayerProfile(playerName, source = 'home') {
   if (activeBtn) activeBtn.classList.add('active');
 
   renderPlayerProfileContent();
+  renderPlayerIdentityHeader();
   showPlayerProfileScreen();
+}
+
+/**
+ * Point d'entrée le plus court possible vers SON PROPRE profil (bouton
+ * 🪪 du header). S'il n'y a pas encore de joueur choisi sur cet appareil
+ * (currentUser.name), on ouvre directement le sélecteur plutôt que de
+ * laisser un bouton qui ne fait rien.
+ */
+function openMyProfile() {
+  if (!currentUser || !currentUser.name) {
+    showToast('Choisis ton profil pour y accéder');
+    showProfilePicker();
+    return;
+  }
+  openPlayerProfile(currentUser.name, 'myProfile');
+}
+
+/** Ouvre le profil depuis une ligne de classement — stopPropagation pour ne jamais déclencher le clic existant de la carte (showHistory en classement général). */
+function openPlayerProfileFromRow(event, playerName) {
+  event.stopPropagation();
+  openPlayerProfile(playerName, 'classement');
 }
 
 function initPlayerProfileScreen() {
@@ -3653,118 +4067,858 @@ function renderPlayerProfileContent() {
     case 'career':
     default: container.innerHTML = renderPlayerCareerHtml(playerProfileData); break;
   }
+  animateProfileCards(container);
 }
 
 /**
- * === Fiche joueur — Saison (compétition en cours) ===
- * Distincte de renderPlayerCareerHtml : celle-ci ne regarde AUCUNE
- * compétition archivée, uniquement STATE/CONFIG de la compétition
- * actuellement ouverte — donc pertinente dès la première étape d'un
- * Tour en cours, sans attendre une archive.
- * S'appuie exclusivement sur des briques déjà autonomes et déjà
- * utilisées ailleurs (cumulativeTotalFromData, rankAt, fetchJerseyWearersDoc,
- * findRiderByPick) : aucun nouveau calcul de score dupliqué.
+ * === PlayerStatisticsCalculator ===
+ * Couche pure : AUCUN accès Firestore, AUCUN DOM. Prend en entrée des
+ * données déjà chargées (state, config, et les docs jerseyWearers déjà
+ * récupérés) et retourne des objets de stats. Testable isolément avec des
+ * fixtures (state/config factices), réutilisable en dehors du rendu.
+ *
+ * Aucune hypothèse codée en dur : chaque fonction doit rester correcte
+ * avec 0 étape jouée, des données partielles, des égalités, ou plusieurs
+ * maillots portés le même jour par le même coureur.
+ */
+/**
+ * === Catalogue des événements — un seul endroit pour icon/importance/category ===
+ * Séparé du texte (qui reste dans la vue, car il dépend souvent de valeurs
+ * dynamiques comme le delta ou les maillots). Ce catalogue, lui, ne dépend
+ * de rien — c'est pourquoi il vit ici, à côté du calculateur, et pas dans
+ * la vue : un futur système de notifications, de Hall of Fame ou de
+ * partage réseaux sociaux pourra lire `importance`/`category` directement
+ * sur l'événement sans jamais avoir à réinterroger un calculateur.
+ * `icon: null` = calculé au moment de la détection (dépend d'une valeur,
+ * ex: rankChange dont le sens ⬆️/⬇️ dépend du signe du delta).
+ */
+const EVENT_METADATA = {
+  start:        { icon: '🚩', importance: 'low',   category: 'ranking' },
+  firstWin:     { icon: '🥇', importance: 'major', category: 'result' },
+  firstPodium:  { icon: '🏅', importance: 'medium', category: 'result' },
+  firstJersey:  { icon: '👕', importance: 'major', category: 'jersey' },
+  doubleJersey: { icon: '👕', importance: 'medium', category: 'jersey' },
+  becameLeader: { icon: '🥇', importance: 'major', category: 'ranking' },
+  lostLead:     { icon: '📉', importance: 'medium', category: 'ranking' },
+  bestScore:    { icon: '🏆', importance: 'medium', category: 'result' },
+  rankChange:   { icon: null, importance: 'low',    category: 'ranking' },
+  biggestClimb: { icon: '🚀', importance: 'major',  category: 'ranking' },
+  biggestDrop:  { icon: '💥', importance: 'major',  category: 'ranking' },
+  top5Streak:   { icon: '🔥', importance: 'medium', category: 'streak' },
+  badStreak:    { icon: '🥶', importance: 'low',    category: 'streak' }
+};
+
+const PlayerStatisticsCalculator = {
+  /** Série des étapes jouées par le joueur — uniquement celles où un score existe. */
+  stagePointsSeries(state, config, player) {
+    const lastStage = lastCompleteStageFromData(state, config);
+    const series = [];
+    for (let s = 1; s <= lastStage; s++) {
+      const d = state.data[player] && state.data[player][String(s)];
+      if (d && d.points !== null && d.points !== undefined && d.points !== '') {
+        series.push({ stage: s, points: Number(d.points), pick: d.pick || null });
+      }
+    }
+    return series;
+  },
+
+  /**
+   * Meilleur(s)/pire(s) score(s) — gère nativement les ex-aequo : renvoie
+   * TOUTES les étapes partageant le score extrême, jamais une seule.
+   */
+  bestWorstStages(series) {
+    if (series.length === 0) return { bestScore: null, bestStages: [], worstScore: null, worstStages: [] };
+    const bestScore = Math.min(...series.map(s => s.points));
+    const worstScore = Math.max(...series.map(s => s.points));
+    return {
+      bestScore,
+      bestStages: series.filter(s => s.points === bestScore).map(s => s.stage),
+      worstScore,
+      worstStages: series.filter(s => s.points === worstScore).map(s => s.stage)
+    };
+  },
+
+  /** Compteurs de classement par étape (points = rang du coureur pronostiqué ce jour-là, donc plus petit = meilleur). */
+  classementCounts(series) {
+    return {
+      stagesPlayed: series.length,
+      wins: series.filter(s => s.points === 1).length,
+      podiums: series.filter(s => s.points <= 3).length,
+      top5: series.filter(s => s.points <= 5).length,
+      top10: series.filter(s => s.points <= 10).length,
+      average: series.length ? series.reduce((sum, s) => sum + s.points, 0) / series.length : null
+    };
+  },
+
+  /** Série du classement Gruppetto du joueur, étape par étape (rang au général, pas le score du jour). */
+  rankSeries(state, config, player) {
+    const lastStage = lastCompleteStageFromData(state, config);
+    const series = [];
+    for (let s = 1; s <= lastStage; s++) {
+      const r = rankAtFromData(state, config, s);
+      if (r && r.ranks[player] !== undefined) series.push({ stage: s, rank: r.ranks[player] });
+    }
+    return series;
+  },
+
+  /** Meilleur/pire rang atteint, progression moyenne étape-à-étape, jours passés en tête. */
+  progressionStats(rankSer) {
+    if (rankSer.length === 0) return { bestRank: null, worstRank: null, averageProgression: null, daysLeader: 0 };
+    const ranks = rankSer.map(r => r.rank);
+    const daysLeader = rankSer.filter(r => r.rank === 1).length;
+    const deltas = [];
+    for (let i = 1; i < rankSer.length; i++) deltas.push(rankSer[i - 1].rank - rankSer[i].rank); // positif = progression (rang plus petit = mieux)
+    return {
+      bestRank: Math.min(...ranks),
+      worstRank: Math.max(...ranks),
+      averageProgression: deltas.length ? deltas.reduce((a, b) => a + b, 0) / deltas.length : null,
+      daysLeader
+    };
+  },
+
+  /**
+   * Chronologie EXACTE des maillots, étape par étape — aucune agrégation,
+   * aucune perte d'information. Un même coureur peut cumuler plusieurs
+   * maillots le même jour : ils apparaissent ensemble dans la même entrée.
+   * Base de vérité unique pour tout ce qui touche aux maillots (le résumé
+   * agrégé daysByType/totalJerseyDays s'en déduit, jamais recalculé à part).
+   * `jerseyDocsByStage` : Map(numéro d'étape -> doc jerseyWearers ou null),
+   * déjà récupéré en amont par le Service — cette fonction ne lit rien.
+   */
+  jerseySeries(series, jerseyDocsByStage) {
+    const out = [];
+    series.forEach(s => {
+      if (!s.pick) return;
+      const doc = jerseyDocsByStage.get(s.stage);
+      if (!doc || !doc.jerseyWearers) return;
+      const rider = findRiderByPick(s.pick);
+      if (!rider) return;
+      const riderKey = rider.pcsSlug || rider.id;
+      const jerseys = doc.jerseyWearers
+        .filter(jw => jw.wearerId === riderKey)
+        .map(jw => JERSEY_TYPE_TO_ICON[jw.jerseyType])
+        .filter(Boolean);
+      if (jerseys.length > 0) out.push({ stage: s.stage, jerseys });
+    });
+    return out;
+  },
+
+  /** Résumé agrégé — dérivé de jerseySeries, jamais recalculé indépendamment. */
+  jerseySummaryFromSeries(jerseySer) {
+    const daysByType = {};
+    jerseySer.forEach(entry => {
+      entry.jerseys.forEach(iconKey => { daysByType[iconKey] = (daysByType[iconKey] || 0) + 1; });
+    });
+    return { daysByType, totalJerseyDays: jerseySer.length };
+  },
+
+  /**
+   * Plus longue série consécutive d'étapes (parmi celles jouées, dans
+   * l'ordre) satisfaisant `predicate`. Générique — réutilisé pour "série
+   * de bons résultats" (top5) et "série de mauvais résultats" (hors top10).
+   * Renvoie null s'il n'y a aucune série (aucune étape ne matche).
+   */
+  longestStreak(series, predicate) {
+    let best = null, current = null;
+    series.forEach(s => {
+      if (predicate(s)) {
+        current = current ? { startStage: current.startStage, endStage: s.stage, length: current.length + 1 } : { startStage: s.stage, endStage: s.stage, length: 1 };
+        if (!best || current.length > best.length) best = current;
+      } else {
+        current = null;
+      }
+    });
+    return best;
+  },
+
+  /**
+   * Plus forte remontée / plus forte chute en une seule étape, au
+   * classement Gruppetto (pas au score du jour). `null` si moins de 2
+   * étapes jouées (rien à comparer).
+   */
+  biggestRankMove(rankSer) {
+    let climb = null, drop = null;
+    for (let i = 1; i < rankSer.length; i++) {
+      const delta = rankSer[i - 1].rank - rankSer[i].rank; // positif = progression
+      if (delta > 0 && (!climb || delta > climb.delta)) climb = { stage: rankSer[i].stage, delta };
+      if (delta < 0 && (!drop || delta < drop.delta)) drop = { stage: rankSer[i].stage, delta };
+    }
+    return { climb, drop };
+  },
+
+  /** Écart-type des scores d'étape — mesure de régularité, utilisée par Métronome/Chasseur d'étapes (Livraison 5). */
+  pointsStdDev(series) {
+    if (series.length === 0) return 0;
+    const mean = series.reduce((s, e) => s + e.points, 0) / series.length;
+    const variance = series.reduce((s, e) => s + Math.pow(e.points - mean, 2), 0) / series.length;
+    return Math.sqrt(variance);
+  },
+
+  /**
+   * Performance par type d'étape (montagne/plaine/vallonnée/clm) — réutilise
+   * `config.stageProfiles`, déjà rempli et déjà utilisé ailleurs dans l'app
+   * (computeSpecialtyAverage), mais recalculé ici en pur/par-joueur à partir
+   * de `series` déjà chargée, sans redemander STATE/CONFIG globalement.
+   */
+  specialtyStats(series, stageProfiles) {
+    const byType = {};
+    series.forEach(s => {
+      const type = (stageProfiles && stageProfiles[String(s.stage)]) || null;
+      if (!type) return;
+      if (!byType[type]) byType[type] = { played: 0, wins: 0, sum: 0 };
+      byType[type].played++;
+      byType[type].sum += s.points;
+      if (s.points === 1) byType[type].wins++;
+    });
+    Object.keys(byType).forEach(t => { byType[t].average = byType[t].sum / byType[t].played; });
+    return byType;
+  },
+
+  /**
+   * Meilleure FENÊTRE de remontée (pas une seule étape) : la plus grande
+   * amélioration entre un point bas et un point haut ultérieur au
+   * classement Gruppetto. Différent de `biggestRankMove` (qui ne regarde
+   * qu'un saut d'une étape à l'autre) — ex: "17 places entre les étapes
+   * 8 et 13" nécessite de comparer des étapes non consécutives.
+   */
+  biggestClimbWindow(rankSer) {
+    if (rankSer.length < 2) return null;
+    let worstSoFar = rankSer[0].rank, worstStage = rankSer[0].stage, best = null;
+    for (let i = 1; i < rankSer.length; i++) {
+      const delta = worstSoFar - rankSer[i].rank;
+      if (delta > 0 && (!best || delta > best.delta)) {
+        best = { fromStage: worstStage, toStage: rankSer[i].stage, delta };
+      }
+      if (rankSer[i].rank > worstSoFar) { worstSoFar = rankSer[i].rank; worstStage = rankSer[i].stage; }
+    }
+    return best;
+  },
+
+  /**
+   * Plus longue série de jours CONSÉCUTIFS avec le même type de maillot
+   * (pas juste un total de jours, un vrai enchaînement sans coupure).
+   * `null` si aucun maillot jamais porté.
+   */
+  longestJerseyStreak(jerseySer) {
+    const stagesByType = {};
+    jerseySer.forEach(entry => {
+      entry.jerseys.forEach(iconKey => {
+        if (!stagesByType[iconKey]) stagesByType[iconKey] = [];
+        stagesByType[iconKey].push(entry.stage);
+      });
+    });
+    let best = null;
+    Object.keys(stagesByType).forEach(iconKey => {
+      const stages = stagesByType[iconKey].slice().sort((a, b) => a - b);
+      let runStart = stages[0], runLen = 1, bestLen = 1, bestStart = stages[0], bestEnd = stages[0];
+      for (let i = 1; i < stages.length; i++) {
+        if (stages[i] === stages[i - 1] + 1) { runLen++; } else { runStart = stages[i]; runLen = 1; }
+        if (runLen > bestLen) { bestLen = runLen; bestStart = runStart; bestEnd = stages[i]; }
+      }
+      if (!best || bestLen > best.length) best = { iconKey, startStage: bestStart, endStage: bestEnd, length: bestLen };
+    });
+    return best;
+  },
+
+  /**
+   * === Détection d'événements structurés (Livraison 2) ===
+   * Seule fonction qui "raconte" la compétition — produit une liste plate
+   * d'événements typés, chronologiques, format volontairement simple :
+   *   { type, stage, ...détails propres au type }
+   * AUCUNE décision d'affichage ici (pas de HTML, pas de texte) : la vue
+   * choisit comment afficher chaque type d'événement, et peut librement
+   * filtrer/grouper selon le contexte (timeline narrative vs Succès).
+   * Un seuil (NOTABLE_RANK_DELTA) définit ce qu'est un "mouvement de
+   * classement notable" pour la narration — choix de curation éditoriale
+   * assumé et nommé, pas une règle de calcul statistique.
+   */
+  detectEvents(stats) {
+    const { series, rankSeries: rankSer, jerseySeries: jerseySer, bestStages } = stats;
+    const NOTABLE_RANK_DELTA = 2;
+    const events = [];
+
+    if (rankSer.length > 0) {
+      events.push({ type: 'start', stage: rankSer[0].stage, rank: rankSer[0].rank });
+    }
+
+    const firstWin = series.find(s => s.points === 1);
+    if (firstWin) events.push({ type: 'firstWin', stage: firstWin.stage });
+
+    const firstPodium = series.find(s => s.points <= 3);
+    if (firstPodium) events.push({ type: 'firstPodium', stage: firstPodium.stage });
+
+    let firstJerseySeen = false;
+    jerseySer.forEach(entry => {
+      if (!firstJerseySeen) {
+        events.push({ type: 'firstJersey', stage: entry.stage, jerseys: entry.jerseys });
+        firstJerseySeen = true;
+      }
+      if (entry.jerseys.length >= 2) {
+        events.push({ type: 'doubleJersey', stage: entry.stage, jerseys: entry.jerseys });
+      }
+    });
+
+    for (let i = 0; i < rankSer.length; i++) {
+      const curr = rankSer[i], prev = i > 0 ? rankSer[i - 1] : null;
+      if (curr.rank === 1 && (!prev || prev.rank !== 1)) events.push({ type: 'becameLeader', stage: curr.stage });
+      if (prev && prev.rank === 1 && curr.rank !== 1) events.push({ type: 'lostLead', stage: curr.stage });
+    }
+
+    bestStages.forEach(stage => events.push({ type: 'bestScore', stage }));
+
+    for (let i = 1; i < rankSer.length; i++) {
+      const delta = rankSer[i - 1].rank - rankSer[i].rank;
+      if (Math.abs(delta) >= NOTABLE_RANK_DELTA) {
+        events.push({ type: 'rankChange', stage: rankSer[i].stage, delta, icon: delta > 0 ? '⬆️' : '⬇️' });
+      }
+    }
+
+    const { climb, drop } = this.biggestRankMove(rankSer);
+    if (climb) events.push({ type: 'biggestClimb', stage: climb.stage, delta: climb.delta });
+    if (drop) events.push({ type: 'biggestDrop', stage: drop.stage, delta: drop.delta });
+
+    const top5Streak = this.longestStreak(series, s => s.points <= 5);
+    if (top5Streak && top5Streak.length >= 2) events.push({ type: 'top5Streak', stage: top5Streak.endStage, startStage: top5Streak.startStage, endStage: top5Streak.endStage, length: top5Streak.length });
+
+    const badStreak = this.longestStreak(series, s => s.points > 10);
+    if (badStreak && badStreak.length >= 2) events.push({ type: 'badStreak', stage: badStreak.endStage, startStage: badStreak.startStage, endStage: badStreak.endStage, length: badStreak.length });
+
+    // Enrichissement final : chaque événement devient un vrai objet métier
+    // (icon/importance/category), pas juste {type, stage}. Le spread de
+    // `e` en dernier garantit qu'un icon déjà explicite (ex: rankChange)
+    // n'est jamais écrasé par la valeur par défaut du catalogue.
+    const enriched = events.map(e => ({ ...EVENT_METADATA[e.type], ...e }));
+    enriched.sort((a, b) => a.stage - b.stage);
+    return enriched;
+  },
+
+  /**
+   * Point d'entrée unique : assemble toutes les statistiques d'un joueur
+   * pour la compétition en cours, à partir de données déjà chargées.
+   * Rien ici ne va chercher de données lui-même (voir PlayerProfileService).
+   */
+  computeSeasonStats(state, config, player, jerseyDocsByStage) {
+    const series = this.stagePointsSeries(state, config, player);
+    const rankSer = this.rankSeries(state, config, player);
+    const jerseySer = this.jerseySeries(series, jerseyDocsByStage);
+    const { climb, drop } = this.biggestRankMove(rankSer);
+
+    const stats = {
+      lastStage: lastCompleteStageFromData(state, config),
+      currentRank: rankSer.length ? rankSer[rankSer.length - 1].rank : null,
+      series,
+      rankSeries: rankSer,
+      jerseySeries: jerseySer,
+      biggestClimb: climb,
+      biggestDrop: drop,
+      climbWindow: this.biggestClimbWindow(rankSer),
+      longestJerseyStreak: this.longestJerseyStreak(jerseySer),
+      specialtyStats: this.specialtyStats(series, config && config.stageProfiles),
+      top5Streak: this.longestStreak(series, s => s.points <= 5),
+      badStreak: this.longestStreak(series, s => s.points > 10),
+      ...this.classementCounts(series),
+      ...this.bestWorstStages(series),
+      ...this.progressionStats(rankSer),
+      ...this.jerseySummaryFromSeries(jerseySer)
+    };
+    stats.events = this.detectEvents(stats);
+    return stats;
+  }
+};
+
+/**
+ * === PlayerProfileService ===
+ * Orchestration : récupère ce qu'il faut depuis Firestore (aujourd'hui,
+ * uniquement les docs jerseyWearers des étapes jouées), puis délègue TOUT
+ * calcul à PlayerStatisticsCalculator — ce module ne calcule jamais rien
+ * lui-même. C'est la seule couche qui a le droit de faire des lectures
+ * réseau pour la fiche joueur.
+ */
+/**
+ * === SignatureCalculator (Livraison 5) ===
+ * Fonction PURE — reçoit `stats` déjà calculé (PlayerStatisticsCalculator),
+ * ne fait aucun accès réseau, aucun DOM. Détermine la "personnalité" la
+ * plus représentative parmi un catalogue de candidats, chacun avec sa
+ * propre fonction de score (0 = ne s'applique pas, jusqu'à 1 = très
+ * marqué). Le plus haut score gagne ; en dessous d'un minimum de données
+ * (stagesPlayed < 3), aucune signature n'est forcée — mieux vaut un état
+ * "trop tôt" honnête qu'une personnalité inventée sur 1 étape.
+ */
+const SIGNATURE_CATALOG = [
+  {
+    id: 'patron', title: 'Patron', icon: '👑',
+    subtitle: 'Tu as passé la majorité de la compétition en tête.',
+    score(stats) {
+      if (!stats.lastStage) return 0;
+      return stats.daysLeader / stats.lastStage;
+    }
+  },
+  {
+    id: 'metronome', title: 'Métronome', icon: '🎯',
+    subtitle: "Tu es l'un des joueurs les plus réguliers de la compétition.",
+    score(stats) {
+      if (stats.stagesPlayed < 5) return 0;
+      const stdDev = PlayerStatisticsCalculator.pointsStdDev(stats.series);
+      const relative = stdDev / (stats.average || 1);
+      return Math.max(0, 1 - relative);
+    }
+  },
+  {
+    id: 'chasseur_etapes', title: "Chasseur d'étapes", icon: '🚀',
+    subtitle: "Tu alternes les coups d'éclat et les journées difficiles, mais tu décroches souvent les meilleurs scores.",
+    score(stats) {
+      if (stats.stagesPlayed < 4) return 0;
+      const stdDev = PlayerStatisticsCalculator.pointsStdDev(stats.series);
+      const variability = Math.min(1, stdDev / (stats.average || 1));
+      const greatBest = stats.bestScore <= 3 ? 1 : 0.3;
+      return variability * greatBest;
+    }
+  },
+  {
+    id: 'attaquant', title: 'Attaquant', icon: '⚡',
+    subtitle: 'Tu réalises souvent de grosses remontées, mais tu prends aussi des risques.',
+    score(stats) {
+      if (!stats.biggestClimb) return 0;
+      const climbFactor = Math.min(1, stats.biggestClimb.delta / 8);
+      const riskFactor = stats.biggestDrop ? Math.min(1, Math.abs(stats.biggestDrop.delta) / 8) : 0;
+      return climbFactor * 0.7 + riskFactor * 0.3;
+    }
+  },
+  {
+    id: 'collectionneur_maillots', title: 'Collectionneur de maillots', icon: '🟢',
+    subtitle: 'Tu changes régulièrement de maillot et occupes souvent les premières places.',
+    score(stats) {
+      const distinctTypes = Object.keys(stats.daysByType).length;
+      if (distinctTypes < 2) return 0;
+      const rankFactor = stats.currentRank && stats.currentRank <= 3 ? 1 : 0.5;
+      return Math.min(1, distinctTypes / 4) * rankFactor;
+    }
+  },
+  {
+    id: 'grimpeur_offensif', title: 'Grimpeur offensif', icon: '🏔️',
+    subtitle: 'Tu construis tes performances dans la montagne et tu remontes progressivement au classement.',
+    score(stats) {
+      const mountain = stats.specialtyStats && stats.specialtyStats.montagne;
+      if (!mountain || mountain.played < 2) return 0;
+      const overallAvg = stats.average || 1;
+      const relativeStrength = Math.max(0, (overallAvg - mountain.average) / overallAvg);
+      const progressionFactor = (stats.averageProgression && stats.averageProgression > 0) ? 1 : 0.3;
+      return relativeStrength * progressionFactor;
+    }
+  }
+];
+const SignatureCalculator = {
+  compute(stats) {
+    if (!stats || stats.stagesPlayed < 3) {
+      return { id: 'nouveau', title: 'Nouveau venu', subtitle: 'Encore trop tôt pour dégager une signature — reviens dans quelques étapes.', icon: '🌱', confidence: 0 };
+    }
+    let best = null;
+    SIGNATURE_CATALOG.forEach(candidate => {
+      const score = candidate.score(stats);
+      if (score > 0 && (!best || score > best.score)) best = { ...candidate, score };
+    });
+    if (!best) {
+      return { id: 'equilibre', title: 'Équilibré', subtitle: 'Ton profil ne se démarque pas encore nettement — polyvalent, sans excès.', icon: '⚖️', confidence: 0.3 };
+    }
+    return { id: best.id, title: best.title, subtitle: best.subtitle, icon: best.icon, confidence: Math.min(1, best.score) };
+  }
+};
+
+/**
+ * === HighlightCalculator (Livraison 5) ===
+ * Fonction PURE — choisit LE moment qui résume le mieux la compétition,
+ * parmi une liste de candidats déjà présents dans `stats` (climbWindow,
+ * longestJerseyStreak, specialtyStats, events...). Aucun texte n'est
+ * "construit dans le HTML" : le rendu affiche seulement `{icon, text}`.
+ * Un filet de sécurité (classement actuel) garantit qu'il y a toujours
+ * quelque chose à montrer, même en tout début de saison.
+ */
+const HighlightCalculator = {
+  compute(stats) {
+    if (!stats || stats.stagesPlayed === 0) return null;
+    const candidates = [];
+
+    const becameLeaderEvents = stats.events.filter(e => e.type === 'becameLeader');
+    const lastBecameLeader = becameLeaderEvents[becameLeaderEvents.length - 1];
+    const lostLeadAfter = lastBecameLeader && stats.events.some(e => e.type === 'lostLead' && e.stage > lastBecameLeader.stage);
+    if (lastBecameLeader && !lostLeadAfter && stats.currentRank === 1) {
+      candidates.push({
+        icon: '🏆',
+        text: `Tu prends la tête de la compétition à l'étape ${lastBecameLeader.stage} et tu conserves le maillot jaune Gruppetto jusqu'à maintenant.`,
+        priority: 100
+      });
+    }
+
+    if (stats.climbWindow && stats.climbWindow.delta >= 5) {
+      candidates.push({
+        icon: '⚡',
+        text: `Tu réalises une remontée de ${stats.climbWindow.delta} places entre les étapes ${stats.climbWindow.fromStage} et ${stats.climbWindow.toStage}.`,
+        priority: 60 + stats.climbWindow.delta
+      });
+    }
+
+    if (stats.longestJerseyStreak && stats.longestJerseyStreak.length >= 3) {
+      const label = JERSEY_ICON_LABELS[stats.longestJerseyStreak.iconKey] || 'maillot';
+      candidates.push({
+        icon: jerseyIconHtml(stats.longestJerseyStreak.iconKey, 22),
+        text: `Tu portes le ${label} pendant ${stats.longestJerseyStreak.length} jours consécutifs (É${stats.longestJerseyStreak.startStage}–É${stats.longestJerseyStreak.endStage}).`,
+        priority: 40 + stats.longestJerseyStreak.length
+      });
+    }
+
+    const mountain = stats.specialtyStats && stats.specialtyStats.montagne;
+    if (mountain && mountain.wins >= 2) {
+      candidates.push({
+        icon: '🏔️',
+        text: `Tu remportes ${mountain.wins} étapes de montagne.`,
+        priority: 30 + mountain.wins * 5
+      });
+    }
+
+    if (stats.wins >= 1) {
+      candidates.push({
+        icon: '🥇',
+        text: `Tu remportes ${stats.wins} victoire${stats.wins > 1 ? 's' : ''} d'étape pronostiquée${stats.wins > 1 ? 's' : ''}.`,
+        priority: 20 + stats.wins * 3
+      });
+    }
+
+    // Filet de sécurité — toujours au moins un moment à montrer.
+    candidates.push({
+      icon: '📊',
+      text: `Tu occupes actuellement la ${stats.currentRank === 1 ? '1ère' : stats.currentRank + 'e'} place du classement Gruppetto.`,
+      priority: 1
+    });
+
+    candidates.sort((a, b) => b.priority - a.priority);
+    return candidates[0];
+  }
+};
+
+/**
+ * === ComparisonCalculator (Livraison 5) ===
+ * Fonction PURE — compare deux `stats` déjà calculés, catégorie par
+ * catégorie. Ne fait AUCUNE lecture réseau (les deux `stats` sont fournis
+ * déjà chargés par le Service). `winner: null` = égalité.
+ */
+const COMPARISON_CATEGORIES = [
+  { label: 'Meilleur score', better: 'lower', get: s => s.bestScore },
+  { label: 'Podiums', better: 'higher', get: s => s.podiums },
+  { label: 'Jours leader', better: 'higher', get: s => s.daysLeader },
+  { label: 'Maillots', better: 'higher', get: s => Object.keys(s.daysByType).length },
+  { label: "Victoires d'étapes", better: 'higher', get: s => s.wins }
+];
+const ComparisonCalculator = {
+  compute(statsA, nameA, statsB, nameB) {
+    if (!statsA || !statsB) return [];
+    return COMPARISON_CATEGORIES.map(cat => {
+      const valA = cat.get(statsA), valB = cat.get(statsB);
+      let winner = null;
+      if (valA !== valB) winner = (cat.better === 'higher') === (valA > valB) ? nameA : nameB;
+      return { label: cat.label, valueA: valA, valueB: valB, winner };
+    });
+  }
+};
+
+const PlayerProfileService = {
+  async getSeasonStats(player) {
+    if (!STATE || !Array.isArray(STATE.players) || !STATE.players.includes(player)) return null;
+
+    const lastStage = lastCompleteStageFromData(STATE, CONFIG);
+    const jerseyDocsByStage = new Map();
+
+    if (lastStage > 0 && currentCompetition && currentCompetition.id) {
+      const stages = Array.from({ length: lastStage }, (_, i) => i + 1);
+      const docs = await Promise.all(stages.map(s => fetchJerseyWearersDoc(currentCompetition.id, s)));
+      stages.forEach((s, i) => jerseyDocsByStage.set(s, docs[i]));
+    }
+
+    return PlayerStatisticsCalculator.computeSeasonStats(STATE, CONFIG, player, jerseyDocsByStage);
+  },
+
+  /**
+   * Deux lectures en parallèle (Promise.all) plutôt que deux appels
+   * séquentiels — même pipeline que getSeasonStats, aucune duplication de
+   * logique. Utilisé uniquement pour la carte de comparaison (§3).
+   */
+  async getComparisonStats(playerA, playerB) {
+    const [statsA, statsB] = await Promise.all([this.getSeasonStats(playerA), this.getSeasonStats(playerB)]);
+    return { statsA, statsB };
+  }
+};
+
+/**
+ * === Helpers de vue partagés — fiche joueur ===
+ * Aucune logique métier ici, uniquement de la mise en forme. Centralisés
+ * pour que Saison ET Succès (et toute future carte) utilisent exactement
+ * le même gabarit — ajouter une carte plus tard = un appel de plus à
+ * statCardHtml(), pas une réorganisation de la page (cf. §6, extensibilité).
+ */
+/** Macro-section (Identité / Saison actuelle / Succès / Évolution / Carrière) — le même gabarit partout, réutilisable par les futures pages. */
+function profileSectionHtml(icon, title, innerHtml) {
+  return `<div class="profile-macro-section">
+    <div class="profile-macro-title">${icon} ${title}</div>
+    ${innerHtml}
+  </div>`;
+}
+function cardHtml(icon, title, rowsHtml) {
+  return `<div class="profile-card">
+    <div class="profile-card-header">${icon} ${title}</div>
+    ${rowsHtml}
+  </div>`;
+}
+function rowHtml(label, value) {
+  return `<div class="profile-row"><span class="label">${label}</span><span class="value">${value}</span></div>`;
+}
+const stageListLabel = (list) => list.length > 1 ? `étapes ${list.join(', ')}` : `étape ${list[0]}`;
+
+/** Compteur animé (0 → valeur) sur les quelques chiffres qui méritent d'attirer l'œil — pas partout, ce serait fatigant à lire. */
+function countUpSpanHtml(value) {
+  return `<span class="count-up" data-target="${value}">0</span>`;
+}
+function animateCountUps(container) {
+  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  container.querySelectorAll('.count-up').forEach(el => {
+    const target = parseFloat(el.dataset.target);
+    if (isNaN(target)) return;
+    if (reduced) { el.textContent = el.dataset.target; return; }
+    const isInt = Number.isInteger(target);
+    const duration = 550;
+    const start = performance.now();
+    function tick(now) {
+      const p = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - p, 3);
+      const current = target * eased;
+      el.textContent = isInt ? Math.round(current) : current.toFixed(1);
+      if (p < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  });
+}
+/** Apparition en cascade des cartes/événements — décalage croissant, léger, jamais plus de 400ms de retard cumulé. */
+function animateProfileCards(container) {
+  container.querySelectorAll('.profile-card, .timeline-item').forEach((el, i) => {
+    el.classList.add('anim-in');
+    el.style.animationDelay = Math.min(i * 35, 400) + 'ms';
+  });
+}
+
+/** Décompte par type de maillot — carte "Succès" (achievement), pas la chronologie (qui vit dans Évolution). */
+function jerseyBreakdownHtml(daysByType) {
+  const types = Object.keys(daysByType);
+  if (types.length === 0) return rowHtml('Maillots remportés', '—');
+  return types.map(k => `
+    <div class="profile-row">
+      <span class="label" style="display:flex; align-items:center; gap:5px;">${jerseyIconHtml(k, 16)} ${JERSEY_ICON_LABELS[k] || 'Maillot'}</span>
+      <span class="value">${daysByType[k]} jour${daysByType[k] > 1 ? 's' : ''}</span>
+    </div>`).join('');
+}
+
+/** Chronologie brute, étape par étape, aucune perte d'information (§2) — vit dans Évolution, pas dans Succès. */
+function jerseyChronologyStripHtml(jerseySer) {
+  if (jerseySer.length === 0) return emptyStateHtml({ icon: '👕', text: 'Aucun maillot porté pour l\'instant.', compact: true });
+  return `<div style="display:flex; flex-wrap:wrap; gap:6px;">
+    ${jerseySer.map(e => `<span style="display:inline-flex; align-items:center; gap:3px; background:var(--asphalt-3); border-radius:8px; padding:3px 7px; font-size:11.5px; color:var(--grey); font-weight:600;">É${e.stage} ${e.jerseys.map(k => jerseyIconHtml(k, 13)).join('')}</span>`).join('')}
+  </div>`;
+}
+
+/** Ne construit QUE le texte — l'icône vient déjà de l'événement lui-même (ev.icon, posé par le catalogue EVENT_METADATA). */
+function eventText(ev) {
+  switch (ev.type) {
+    case 'start': return `Départ de la compétition — ${ev.rank === 1 ? '1er' : ev.rank + 'e'} après l\'étape ${ev.stage}`;
+    case 'firstWin': return "Première victoire d'étape pronostiquée";
+    case 'firstPodium': return 'Premier podium';
+    case 'firstJersey': return `Premier maillot : ${ev.jerseys.map(k => JERSEY_ICON_LABELS[k] || k).join(' + ')}`;
+    case 'doubleJersey': return `Porte ${ev.jerseys.length} maillots à la fois (${ev.jerseys.map(k => JERSEY_ICON_LABELS[k] || k).join(', ')})`;
+    case 'becameLeader': return 'Devient leader du classement Gruppetto';
+    case 'lostLead': return 'Perd la première place';
+    case 'bestScore': return 'Meilleur score personnel de la saison';
+    case 'rankChange': return `${ev.delta > 0 ? '+' : ''}${ev.delta} place${Math.abs(ev.delta) > 1 ? 's' : ''} au classement Gruppetto`;
+    case 'biggestClimb': return `Plus forte remontée de la saison (+${ev.delta} places en une étape)`;
+    case 'biggestDrop': return `Plus forte chute de la saison (${ev.delta} places en une étape)`;
+    case 'top5Streak': return `Série de ${ev.length} étapes de suite dans le top 5 (É${ev.startStage}–É${ev.endStage})`;
+    case 'badStreak': return `Série de ${ev.length} étapes de suite hors du top 10 (É${ev.startStage}–É${ev.endStage})`;
+    default: return ev.type;
+  }
+}
+
+/**
+ * Frise narrative (§3) — volontairement CURATÉE : ne montre que les
+ * événements marquants, jamais une ligne par étape. Couleur de la pastille
+ * = `ev.importance` (posée par EVENT_METADATA à la détection) : majeur en
+ * jaune, moyen en vert, mineur en gris — c'est ce qui "guide le regard"
+ * sans qu'aucune règle de couleur ne soit recalculée ici.
+ */
+const TIMELINE_EVENT_TYPES = new Set(['start', 'firstWin', 'firstPodium', 'firstJersey', 'doubleJersey', 'becameLeader', 'lostLead', 'bestScore', 'rankChange', 'biggestClimb', 'biggestDrop']);
+function timelineHtml(events) {
+  const shown = events.filter(e => TIMELINE_EVENT_TYPES.has(e.type));
+  if (shown.length === 0) return emptyStateHtml({ icon: '📖', text: "Pas encore assez d'étapes pour raconter une histoire.", compact: true });
+  return `<div class="profile-timeline">${shown.map(ev => `
+    <div class="timeline-item importance-${ev.importance || 'low'}">
+      <div class="ti-stage">É${ev.stage}</div>
+      <div class="ti-icon">${ev.icon || '•'}</div>
+      <div class="ti-text">${eventText(ev)}</div>
+    </div>`).join('')}</div>`;
+}
+
+/**
+ * === Succès (§ Livraison 2, restylé Livraison 4) ===
+ * Fonction PURE — reçoit `stats` déjà calculé, ne fait aucun accès réseau.
+ * Fusionnée dans la page Saison (plus un onglet à part depuis la
+ * Livraison 4) : un seul appel à PlayerProfileService pour toute la page,
+ * au lieu de deux quand Succès était un onglet séparé.
+ * Différencie visuellement Records / Séries / Premières fois / Maillots —
+ * quatre cartes, jamais une seule liste plate.
+ */
+function buildSuccessSectionHtml(stats) {
+  const recordsRows = [
+    rowHtml('Meilleur score de la saison', `${stats.bestScore} pt${stats.bestScore > 1 ? 's' : ''} <span style="color:var(--grey); font-weight:400;">(${stageListLabel(stats.bestStages)})</span>`),
+    stats.biggestClimb ? rowHtml('Plus grande remontée (1 étape)', `+${stats.biggestClimb.delta} places <span style="color:var(--grey); font-weight:400;">(É${stats.biggestClimb.stage})</span>`) : '',
+    stats.biggestDrop ? rowHtml('Plus forte chute (1 étape)', `${stats.biggestDrop.delta} places <span style="color:var(--grey); font-weight:400;">(É${stats.biggestDrop.stage})</span>`) : ''
+  ].join('');
+
+  const streaksRows = (stats.top5Streak || stats.badStreak)
+    ? [
+        stats.top5Streak ? rowHtml('Meilleure série top 5', `${stats.top5Streak.length} étapes de suite <span style="color:var(--grey); font-weight:400;">(É${stats.top5Streak.startStage}–É${stats.top5Streak.endStage})</span>`) : '',
+        stats.badStreak ? rowHtml('Plus longue traversée du désert', `${stats.badStreak.length} étapes de suite <span style="color:var(--grey); font-weight:400;">(É${stats.badStreak.startStage}–É${stats.badStreak.endStage})</span>`) : ''
+      ].join('')
+    : rowHtml('Séries', 'Pas encore de série marquante');
+
+  const milestoneEvents = stats.events.filter(e => ['firstWin', 'firstPodium', 'firstJersey', 'becameLeader'].includes(e.type));
+  const milestonesHtml = milestoneEvents.length > 0
+    ? milestoneEvents.map(ev => `<div class="profile-row"><span class="label">${ev.icon} ${eventText(ev)}</span><span class="value" style="color:var(--grey); font-weight:600;">É${ev.stage}</span></div>`).join('')
+    : rowHtml('Premières fois', 'Encore rien à débloquer');
+
+  return `
+    <div class="profile-subsection-title">📜 Records</div>
+    ${cardHtml('🏆', 'Records personnels', recordsRows)}
+    <div class="profile-subsection-title">🔥 Séries</div>
+    ${cardHtml('📊', 'Séries marquantes', streaksRows)}
+    <div class="profile-subsection-title">✨ Premières fois</div>
+    ${cardHtml('🎉', 'Étapes clés', milestonesHtml)}
+    <div class="profile-subsection-title">👕 Maillots</div>
+    ${cardHtml('👕', 'Maillots remportés', jerseyBreakdownHtml(stats.daysByType))}
+  `;
+}
+
+/**
+ * === Fiche joueur — page "Saison" (compétition en cours) — Livraison 4 ===
+ * Vue pure : ne calcule rien, un seul appel réseau (getSeasonStats) pour
+ * toute la page. Regroupe Saison actuelle + Succès + Évolution en une
+ * frise continue — c'est ce qui donne l'effet "histoire qu'on parcourt"
+ * plutôt que des onglets qu'on sélectionne. Carrière/Palmarès/Historique
+ * restent des onglets séparés : c'est une archive potentiellement longue,
+ * pas la narration de la saison en cours.
  */
 async function renderPlayerSeasonContent(container) {
   const playerName = currentPlayerProfileName;
   const inCompetition = STATE && Array.isArray(STATE.players) && STATE.players.includes(playerName);
 
   if (!inCompetition) {
-    container.innerHTML = emptyStateHtml({ icon: '🗓️', title: 'Pas dans cette compétition', text: "Ce joueur ne participe pas à la compétition actuellement ouverte." });
-    return;
-  }
-
-  const lastStage = lastCompleteStage();
-  if (lastStage === 0) {
-    container.innerHTML = emptyStateHtml({ icon: '🗓️', title: 'Saison pas encore commencée', text: "Aucune étape validée pour l'instant." });
+    container.innerHTML = emptyStateHtml({ icon: '🚴', title: 'Pas dans cette compétition', text: "Ce joueur ne participe pas à la compétition actuellement ouverte." });
     return;
   }
 
   container.innerHTML = `
-    ${skeletonHtml({ height: '120px', radius: '12px', style: 'margin-bottom:10px;' })}
-    ${skeletonHtml({ height: '80px', radius: '12px' })}
+    ${skeletonHtml({ height: '120px', radius: '14px', style: 'margin-bottom:10px;' })}
+    ${skeletonHtml({ height: '90px', radius: '14px' })}
   `;
 
-  const stagesPlayed = [];
-  for (let s = 1; s <= lastStage; s++) {
-    const d = STATE.data[playerName] && STATE.data[playerName][String(s)];
-    if (d && d.points !== null && d.points !== undefined && d.points !== '') {
-      stagesPlayed.push({ stage: s, points: Number(d.points), pick: d.pick || null });
-    }
-  }
-
-  // Si l'écran a changé de joueur/compétition pendant les lectures Firestore
-  // ci-dessous, on abandonne silencieusement — évite d'écraser un autre
-  // écran déjà affiché entretemps.
+  // Si l'écran a changé de joueur pendant la lecture Firestore ci-dessous,
+  // on abandonne silencieusement — évite d'écraser un autre écran déjà
+  // affiché entretemps.
   const requestedFor = playerName;
-
-  let jerseyStagesCount = 0;
-  const jerseyTypesHeld = new Set();
-  if (currentCompetition && currentCompetition.id) {
-    const jerseyDocs = await Promise.all(
-      stagesPlayed.map(sp => sp.pick ? fetchJerseyWearersDoc(currentCompetition.id, sp.stage) : Promise.resolve(null))
-    );
-    if (currentPlayerProfileName !== requestedFor) return; // changement entretemps
-    stagesPlayed.forEach((sp, i) => {
-      const doc = jerseyDocs[i];
-      if (!doc || !doc.jerseyWearers || !sp.pick) return;
-      const rider = findRiderByPick(sp.pick);
-      if (!rider) return;
-      const riderKey = rider.pcsSlug || rider.id;
-      let heldAny = false;
-      doc.jerseyWearers.forEach(jw => {
-        if (jw.wearerId === riderKey) {
-          heldAny = true;
-          const iconKey = JERSEY_TYPE_TO_ICON[jw.jerseyType];
-          if (iconKey) jerseyTypesHeld.add(iconKey);
-        }
-      });
-      if (heldAny) jerseyStagesCount++;
-    });
-  }
-
+  const stats = await PlayerProfileService.getSeasonStats(playerName);
   if (currentPlayerProfileName !== requestedFor) return;
 
-  if (stagesPlayed.length === 0) {
-    container.innerHTML = emptyStateHtml({ icon: '🗓️', text: 'Aucun pronostic joué pour l\'instant.', compact: true });
+  if (!stats || stats.lastStage === 0) {
+    container.innerHTML = emptyStateHtml({ icon: '🚴', title: 'Saison pas encore commencée', text: "Aucune étape validée pour l'instant." });
+    return;
+  }
+  if (stats.stagesPlayed === 0) {
+    container.innerHTML = emptyStateHtml({ icon: '🚴', text: "Aucun pronostic joué pour l'instant.", compact: true });
     return;
   }
 
-  const wins = stagesPlayed.filter(sp => sp.points === 1).length;
-  const top3Count = stagesPlayed.filter(sp => sp.points <= 3).length;
-  const top3Pct = Math.round((top3Count / stagesPlayed.length) * 100);
-  const best = stagesPlayed.reduce((a, b) => a.points <= b.points ? a : b);
-  const worst = stagesPlayed.reduce((a, b) => a.points >= b.points ? a : b);
-  const average = stagesPlayed.reduce((sum, sp) => sum + sp.points, 0) / stagesPlayed.length;
-  const currentRank = rankAt(lastStage).ranks[playerName];
-  const streak = computeCurrentStreak(playerName, lastStage);
-
+  const streak = computeCurrentStreak(playerName, stats.lastStage);
   const streakHtml = streak
-    ? `<div class="fun-stat-placeholder" style="background:${streak.direction === 'up' ? 'rgba(47,158,110,0.14)' : 'rgba(232,66,90,0.14)'}; border:1px solid ${streak.direction === 'up' ? 'var(--vert)' : 'var(--polka)'}; border-radius:12px; padding:12px 14px; margin-bottom:10px; font-size:13px; font-weight:700; color:${streak.direction === 'up' ? 'var(--vert)' : 'var(--polka)'};">
-        ${streak.direction === 'up' ? '🔥' : '📉'} ${streak.count} étape${streak.count > 1 ? 's' : ''} de suite en ${streak.direction === 'up' ? 'progression' : 'recul'} au classement
+    ? `<div class="profile-card" style="background:${streak.direction === 'up' ? 'rgba(47,158,110,0.14)' : 'rgba(232,66,90,0.14)'}; border-color:${streak.direction === 'up' ? 'var(--vert)' : 'var(--polka)'};">
+        <span style="font-size:13px; font-weight:700; color:${streak.direction === 'up' ? 'var(--vert)' : 'var(--polka)'};">
+          ${streak.direction === 'up' ? '🔥' : '📉'} ${streak.count} étape${streak.count > 1 ? 's' : ''} de suite en ${streak.direction === 'up' ? 'progression' : 'recul'}
+        </span>
       </div>`
     : '';
 
-  const jerseysHtml = jerseyTypesHeld.size > 0
-    ? `<div style="display:flex; align-items:center; gap:6px; padding:4px 0; font-size:13px;">
-        <span style="color:var(--grey); flex:1;">Maillots portés</span>
-        <span style="display:flex; gap:4px;">${Array.from(jerseyTypesHeld).map(k => jerseyIconHtml(k, 18)).join('')}</span>
-      </div>`
-    : `<div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Maillots portés</span><span style="font-weight:700;">—</span></div>`;
+  const top3Pct = Math.round((stats.podiums / stats.stagesPlayed) * 100);
 
-  container.innerHTML = `
-    ${streakHtml}
-    <div class="fun-stat-placeholder" style="background:var(--asphalt-2); border:1px solid var(--line); border-radius:12px; padding:14px;">
-      <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Classement actuel</span><span style="font-weight:700;">${currentRank ? (currentRank === 1 ? '🥇 1er' : `${currentRank}e`) : '—'}</span></div>
-      <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Étapes jouées</span><span style="font-weight:700;">${stagesPlayed.length} / ${lastStage}</span></div>
-      <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Victoires d'étape pronostiquées</span><span style="font-weight:700;">${wins}</span></div>
-      <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Top 3 trouvés</span><span style="font-weight:700;">${top3Count} (${top3Pct}%)</span></div>
-      <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Meilleur score</span><span style="font-weight:700;">${best.points} pt${best.points > 1 ? 's' : ''} <span style="color:var(--grey); font-weight:400;">(É${best.stage})</span></span></div>
-      <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Pire score</span><span style="font-weight:700;">${worst.points} pts <span style="color:var(--grey); font-weight:400;">(É${worst.stage})</span></span></div>
-      <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Moyenne par étape</span><span style="font-weight:700;">${average.toFixed(1)} pts</span></div>
-      ${jerseysHtml}
-    </div>
-  `;
+  // === Signature + Moment fort (Livraison 5) — calculateurs purs, la vue n'affiche que ce qu'ils renvoient. ===
+  const signature = SignatureCalculator.compute(stats);
+  const highlight = HighlightCalculator.compute(stats);
+
+  const signatureHtml = `<div class="profile-card anim-in" style="text-align:center; background:linear-gradient(160deg, var(--asphalt-2), var(--asphalt-3));">
+    <div style="font-size:32px; line-height:1;">${signature.icon}</div>
+    <div style="font-family:var(--font-display); font-size:16px; color:var(--blanc); margin-top:6px;">${signature.title}</div>
+    <div style="font-size:12.5px; color:var(--grey); margin-top:4px; line-height:1.4;">${signature.subtitle}</div>
+  </div>`;
+
+  const highlightHtml = highlight
+    ? `<div class="profile-card anim-in" style="text-align:center; border-color:var(--jaune); background:linear-gradient(160deg, rgba(255,205,5,0.10), var(--asphalt-2));">
+        <div style="font-size:34px; line-height:1;">${highlight.icon}</div>
+        <div style="font-size:14px; margin-top:10px; line-height:1.45;">${highlight.text}</div>
+      </div>`
+    : '';
+
+  // === Comparaison (Livraison 5) — uniquement quand on regarde le profil de quelqu'un d'autre. ===
+  let comparisonHtml = '';
+  const viewerName = currentUser && currentUser.name;
+  if (viewerName && norm(viewerName) !== norm(playerName) && STATE.players.includes(viewerName)) {
+    const { statsA, statsB } = await PlayerProfileService.getComparisonStats(viewerName, playerName);
+    if (currentPlayerProfileName !== requestedFor) return;
+    const comparisons = ComparisonCalculator.compute(statsA, viewerName, statsB, playerName);
+    if (comparisons.length > 0) {
+      comparisonHtml = `
+        <div class="profile-subsection-title">🆚 ${viewerName} vs ${playerName}</div>
+        <div class="profile-card">
+          ${comparisons.map(c => `<div class="profile-row"><span class="label">${c.label}</span><span class="value">${c.winner ? `${c.winner} ✔` : 'Égalité'}</span></div>`).join('')}
+        </div>`;
+    }
+  }
+
+  container.innerHTML =
+    signatureHtml + highlightHtml + comparisonHtml +
+    profileSectionHtml('📊', 'Saison actuelle', `
+      ${cardHtml('📈', 'Performance', `
+        ${rowHtml('Étapes jouées', `${stats.stagesPlayed} / ${stats.lastStage}`)}
+        ${rowHtml('Moyenne par étape', `${countUpSpanHtml(Number(stats.average.toFixed(1)))} pts`)}
+        ${rowHtml('Meilleur score', `${stats.bestScore} pt${stats.bestScore > 1 ? 's' : ''} <span style="color:var(--grey); font-weight:400;">(${stageListLabel(stats.bestStages)})</span>`)}
+        ${rowHtml('Pire score', `${stats.worstScore} pts <span style="color:var(--grey); font-weight:400;">(${stageListLabel(stats.worstStages)})</span>`)}
+      `)}
+      ${cardHtml('🏅', 'Classements', `
+        ${rowHtml('Classement Gruppetto actuel', stats.currentRank === 1 ? '🥇 1er' : `${stats.currentRank}e`)}
+        ${rowHtml("Victoires d'étape pronostiquées", countUpSpanHtml(stats.wins))}
+        ${rowHtml('Podiums (top 3)', `${countUpSpanHtml(stats.podiums)} (${top3Pct}%)`)}
+        ${rowHtml('Top 5', stats.top5)}
+        ${rowHtml('Top 10', stats.top10)}
+      `)}
+    `) +
+    profileSectionHtml('🏅', 'Succès', buildSuccessSectionHtml(stats)) +
+    profileSectionHtml('📈', 'Évolution', `
+      ${streakHtml}
+      <div class="profile-subsection-title">📖 Récit de la compétition</div>
+      ${cardHtml('📖', 'Timeline', timelineHtml(stats.events))}
+      <div class="profile-subsection-title">📊 Progression</div>
+      ${cardHtml('📈', 'Classement dans le temps', `
+        ${rowHtml('Meilleur classement atteint', stats.bestRank === 1 ? '🥇 1er' : `${stats.bestRank}e`)}
+        ${rowHtml('Pire classement atteint', `${stats.worstRank}e`)}
+        ${rowHtml('Progression moyenne / étape', stats.averageProgression === null ? '—' : (stats.averageProgression > 0 ? '+' : '') + stats.averageProgression.toFixed(1) + ' place' + (Math.abs(stats.averageProgression) >= 2 ? 's' : ''))}
+        ${rowHtml('Jours passés en tête', stats.daysLeader)}
+      `)}
+      <div class="profile-subsection-title">👕 Chronologie des maillots</div>
+      ${cardHtml('👕', 'Jour par jour', jerseyChronologyStripHtml(stats.jerseySeries))}
+    `);
+
+  animateProfileCards(container);
+  animateCountUps(container);
 }
 
 /**
@@ -3793,16 +4947,14 @@ function computeCurrentStreak(player, lastStage) {
 
 function renderPlayerCareerHtml(profile) {
   const bestRankLabel = profile.bestRank === 1 ? '1er' : `${profile.bestRank}e`;
-  return `
-    <div class="fun-stat-placeholder" style="background:var(--asphalt-2); border:1px solid var(--line); border-radius:12px; padding:14px;">
-      <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Participations</span><span style="font-weight:700;">${profile.participations}</span></div>
-      <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Victoires</span><span style="font-weight:700;">${profile.wins}</span></div>
-      <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Podiums</span><span style="font-weight:700;">${profile.podiums}</span></div>
-      <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Meilleur classement</span><span style="font-weight:700;">${bestRankLabel}</span></div>
-      <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Classement moyen</span><span style="font-weight:700;">${profile.averageRank.toFixed(1)}</span></div>
-      <div style="display:flex; justify-content:space-between; padding:4px 0; font-size:13px;"><span style="color:var(--grey);">Dernière compétition</span><span style="font-weight:700;">${profile.lastCompetitionName || '—'}</span></div>
-    </div>
-  `;
+  return cardHtml('🏆', 'Statistiques carrière', `
+    ${rowHtml('Participations', profile.participations)}
+    ${rowHtml('Victoires', profile.wins)}
+    ${rowHtml('Podiums', profile.podiums)}
+    ${rowHtml('Meilleur classement', bestRankLabel)}
+    ${rowHtml('Classement moyen', profile.averageRank.toFixed(1))}
+    ${rowHtml('Dernière compétition', profile.lastCompetitionName || '—')}
+  `);
 }
 
 function playerResultLabel(rank) {
@@ -5027,7 +6179,7 @@ function renderClassementGeneral() {
     return `<div class="rank-card ${rank===1?'top1':''}" data-player="${entry.p}" onclick="showHistory('${entry.p.replace(/'/g,"\\'")}')">
       <div class="rank-num ${rank<=3?'medal':''}">${medal(rank)}</div>
       <div class="rank-name-block">
-        <div class="rank-name">${entry.p} <span style="color:var(--grey); font-size:10px; font-weight:400;">›</span></div>
+        <div class="rank-name"><span onclick="openPlayerProfileFromRow(event, '${entry.p.replace(/'/g,"\\'")}')" style="text-decoration:underline; text-decoration-color:var(--line); text-underline-offset:3px; cursor:pointer;">${entry.p}</span> <span style="color:var(--grey); font-size:10px; font-weight:400;">›</span></div>
         <div class="rank-points">${entry.total} pts${bonusNote}</div>
       </div>
       <div class="sparkline">${spark}</div>
@@ -5079,7 +6231,7 @@ function renderClassementStage(stage) {
     return `<div class="rank-card ${rank===1?'top1':''}">
       <div class="rank-num ${rank<=3?'medal':''}">${medal(rank)}</div>
       <div class="rank-name-block">
-        <div class="rank-name">${e.p}</div>
+        <div class="rank-name"><span onclick="openPlayerProfileFromRow(event, '${e.p.replace(/'/g,"\\'")}')" style="text-decoration:underline; text-decoration-color:var(--line); text-underline-offset:3px; cursor:pointer;">${e.p}</span></div>
         <div class="rank-points" style="display:flex; align-items:center; gap:6px;">
           ${e.pick ? jerseyIconHtml(riderJerseyOf(e.pick), 20) : ''}
           <span>${e.pick || '—'} · ${e.pts} pt${e.pts>1?'s':''}</span>
@@ -8035,6 +9187,7 @@ async function fetchJerseyWearersDoc(competitionId, stageNumber) {
   }
 }
 const JERSEY_TYPE_TO_ICON = { general: 'yellow', points: 'green', mountain: 'polka', youth: 'white' };
+const JERSEY_ICON_LABELS = { yellow: 'Maillot jaune', green: 'Maillot vert', polka: 'Maillot à pois', white: 'Maillot blanc' };
 
 function resultatsEmptyState(text) {
   return `<div class="fun-stat-placeholder" style="background:var(--asphalt-2); border:1px solid var(--line); border-radius:12px; padding:16px; text-align:center; color:var(--grey); font-size:12.5px;">${text}</div>`;
@@ -8429,6 +9582,7 @@ async function init() {
   initPasscodeHandler();
   initSwitchProfileButton();
   initCommentModal();
+  initPlayerIdentityModal();
   initStageImageInput();
   initChat();
   initNewCompetitionButton();
