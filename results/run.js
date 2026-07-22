@@ -54,7 +54,6 @@ async function main() {
     console.log(`Étape détectée pour aujourd'hui : ${stageNumber}`);
   }
 
-  const stageResultProviderInstance = new PCSStageResultProvider();
   // Uniquement pour les classements cumulés : le contenu réel n'est
   // jamais présent dans une réponse HTTP brute (confirmé en conditions
   // réelles), il faut exécuter le JavaScript de la page.
@@ -69,6 +68,14 @@ async function main() {
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
   });
   const classificationProviderInstance = new PCSClassificationProvider({ fetchImpl: classificationBrowserFetch });
+  // Résultat d'étape : migré vers le même navigateur headless que la
+  // classification (22/07/2026) — un fetch HTTP simple avec un
+  // User-Agent auto-identifié comme script s'est mis à recevoir un 403
+  // lui aussi (PCS a visiblement resserré sa protection anti-bot en
+  // pleine période de Tour). Même page cible, même mécanisme déjà
+  // éprouvé — pas une nouvelle solution, la même que celle qui a réglé
+  // le même symptôme sur la classification.
+  const stageResultProviderInstance = new PCSStageResultProvider({ fetchImpl: classificationBrowserFetch });
 
   const stageResultProvider = {
     name: stageResultProviderInstance.name,

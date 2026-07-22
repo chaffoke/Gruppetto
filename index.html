@@ -646,6 +646,7 @@
     display: flex; align-items: center; justify-content: center;
   }
   .stage-chip.done { border-color: var(--vert); color: var(--vert); }
+  .stage-chip.has-results { border-color: var(--vert); color: var(--vert); background: rgba(46,160,67,0.12); }
   .stage-chip.active { background: var(--jaune); color: var(--asphalt); border-color: var(--jaune); }
 
   .pick-row-wrap {
@@ -3930,27 +3931,42 @@ function selectAvatarTeam(teamId) {
 /** L'avatar (cosmetics.avatarTeamId) n'a aucun rapport avec preferences.favoriteTeamId — un joueur peut arborer INEOS en avatar tout en ayant Visma comme équipe favorite. */
 async function openPlayerIdentityModal(playerName) {
   editingIdentityPlayerName = playerName;
-  const identity = await PlayerIdentityRepository.get(playerName);
-  selectedAvatarTeamId = identity.cosmetics.avatarTeamId;
 
+  // Affichage immédiat de la fenêtre — ne JAMAIS attendre la lecture Firestore
+  // avant de la montrer (bug remonté : sur une connexion lente, rien ne se
+  // passait à l'écran pendant l'attente, donnant l'impression que le bouton
+  // "Modifier" ne faisait rien ; la fenêtre finissait par apparaître plus
+  // tard, une fois l'utilisateur déjà reparti cliquer ailleurs).
   document.getElementById('avatarSearchInput').value = '';
+  selectedAvatarTeamId = null;
   renderAvatarGrid('');
 
   const teamSelect = document.getElementById('prefFavoriteTeam');
   teamSelect.innerHTML = '<option value="">Aucune</option>' + CONFIG.teams.map(t => `<option value="${t.team}">${t.team}</option>`).join('');
-  teamSelect.value = identity.preferences.favoriteTeamId || '';
+  teamSelect.value = '';
 
-  document.getElementById('prefFavoriteRider').value = identity.preferences.favoriteRiderId || '';
+  document.getElementById('prefFavoriteRider').value = '';
 
   const stageTypeSelect = document.getElementById('prefStageType');
   stageTypeSelect.innerHTML = STAGE_TYPE_OPTIONS.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
-  stageTypeSelect.value = identity.preferences.preferredStageType || '';
+  stageTypeSelect.value = '';
 
   const riderProfileSelect = document.getElementById('prefRiderProfile');
   riderProfileSelect.innerHTML = RIDER_PROFILE_OPTIONS.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
-  riderProfileSelect.value = identity.preferences.preferredRiderProfile || '';
+  riderProfileSelect.value = '';
 
   document.getElementById('playerIdentityModal').classList.add('show');
+
+  // Le vrai contenu arrive ensuite, dès que Firestore répond — la fenêtre est déjà visible pendant ce temps.
+  const identity = await PlayerIdentityRepository.get(playerName);
+  if (editingIdentityPlayerName !== playerName) return; // la fenêtre a été rouverte sur quelqu'un d'autre entre-temps : résultat périmé, on l'ignore
+
+  selectedAvatarTeamId = identity.cosmetics.avatarTeamId;
+  renderAvatarGrid(document.getElementById('avatarSearchInput').value);
+  teamSelect.value = identity.preferences.favoriteTeamId || '';
+  document.getElementById('prefFavoriteRider').value = identity.preferences.favoriteRiderId || '';
+  stageTypeSelect.value = identity.preferences.preferredStageType || '';
+  riderProfileSelect.value = identity.preferences.preferredRiderProfile || '';
 }
 
 function closePlayerIdentityModal() {
@@ -4470,8 +4486,36 @@ const SIGNATURE_CATALOG = [
       if (stats.stagesPlayed < 4) return 0;
       const stdDev = PlayerStatisticsCalculator.pointsStdDev(stats.series);
       const variability = Math.min(1, stdDev / (stats.average || 1));
-      const greatBest = stats.bestScore <= 3 ? 1 : 0.3;
+      // Sous ce seuil, ce n'est plus vraiment "en dents de scie" — juste le
+      // bruit normal d'un jeu de pronostics. Corrige le fait que ce critère
+      // était vérifié pour quasiment tout le monde (variabilité > 0 suffisait).
+      if (variability < 0.45) return 0;
+      const podiumRate = stats.stagesPlayed ? stats.podiums / stats.stagesPlayed : 0;
+      // Remplace l'ancien seuil binaire ("meilleur score déjà ≤ 3 -> 1, sinon 0.3")
+      // par un vrai taux de podiums sur l'ensemble de la compétition.
+      const greatBest = podiumRate > 0 ? Math.min(1, 0.5 + podiumRate) : 0.2;
       return variability * greatBest;
+    }
+  },
+  {
+    id: 'habitue_top10', title: 'Habitué du top 10', icon: '📋',
+    subtitle: 'Tu termines très souvent dans le wagon de tête, sans forcément viser la victoire du jour.',
+    score(stats) {
+      if (stats.stagesPlayed < 5) return 0;
+      const top10Rate = stats.top10 / stats.stagesPlayed;
+      const neverLed = (!stats.daysLeader || stats.daysLeader === 0) ? 1 : 0.4;
+      return top10Rate * neverLed;
+    }
+  },
+  {
+    id: 'rouleur_clm', title: 'Rouleur', icon: '⏱️',
+    subtitle: 'Tu excelles particulièrement sur les contre-la-montre.',
+    score(stats) {
+      const clm = stats.specialtyStats && stats.specialtyStats.clm;
+      if (!clm || clm.played < 1) return 0;
+      const overallAvg = stats.average || 1;
+      const relativeStrength = Math.max(0, (overallAvg - clm.average) / overallAvg);
+      return relativeStrength;
     }
   },
   {
@@ -7487,19 +7531,55 @@ function renderFunStats() {
 
 let selectedStage = null;
 
+// Existence des résultats importés par étape — INDÉPENDANT de la validation
+// des pronostics (`done`, qui exige en plus une action manuelle de
+// l'organisateur). Mettre en vert "on a les résultats" doit refléter la
+// vraie présence de stageResults/{N}, pas cette validation. Cache par
+// compétition pour ne jamais mélanger deux compétitions différentes.
+let STAGE_HAS_RESULTS_CACHE = {}; // { [competitionId]: { [stage]: boolean } }
+
+async function ensureStageResultsCache(elId, onSelect) {
+  if (!currentCompetition || !currentCompetition.id || !db) return;
+  const competitionId = currentCompetition.id;
+  if (!STAGE_HAS_RESULTS_CACHE[competitionId]) STAGE_HAS_RESULTS_CACHE[competitionId] = {};
+  const cache = STAGE_HAS_RESULTS_CACHE[competitionId];
+
+  const toCheck = [];
+  for (let s = 1; s <= TOTAL_STAGES; s++) {
+    if (cache[s] === undefined) toCheck.push(s);
+  }
+  if (toCheck.length === 0) return;
+
+  await Promise.all(toCheck.map(async s => {
+    try {
+      const doc = await fetchStageResultsDoc(competitionId, s);
+      cache[s] = !!(doc && doc.results && doc.results.length > 0);
+    } catch (e) {
+      cache[s] = false;
+    }
+  }));
+  // Compétition encore active après l'attente ? Sinon on n'écrase pas l'affichage courant.
+  if (currentCompetition && currentCompetition.id === competitionId) renderStagePicker(elId, onSelect);
+}
+
 function renderStagePicker(elId, onSelect) {
   const last = lastCompleteStage();
   const target = last + 1 <= TOTAL_STAGES ? last + 1 : TOTAL_STAGES;
   if (selectedStage === null) selectedStage = target;
   const el = document.getElementById(elId);
+  const resultsCache = (currentCompetition && STAGE_HAS_RESULTS_CACHE[currentCompetition.id]) || {};
   el.innerHTML = '';
   for (let s = 1; s <= TOTAL_STAGES; s++) {
     const chip = document.createElement('button');
-    chip.className = 'stage-chip' + (s <= last ? ' done' : '') + (s === selectedStage ? ' active' : '');
+    chip.className = 'stage-chip'
+      + (s <= last ? ' done' : '')
+      + (resultsCache[s] === true ? ' has-results' : '')
+      + (s === selectedStage ? ' active' : '');
     chip.textContent = s;
     chip.onclick = () => { selectedStage = s; onSelect(); };
     el.appendChild(chip);
   }
+  ensureStageResultsCache(elId, onSelect); // ne bloque pas ce premier rendu — complète en arrière-plan, puis se ré-affiche
 }
 
 async function togglePickHidden(player, stage) {
@@ -9232,24 +9312,35 @@ async function renderResultatsContent() {
     const label = resultatsMode === 'equipes' ? 'Classement par équipes' : 'Classement général';
     metaEl.textContent = doc.lastSynced ? `${label} après ${stageForFetch} étape${stageForFetch > 1 ? 's' : ''} · mis à jour : ${new Date(doc.lastSynced).toLocaleString('fr-FR')}` : `${label} après ${stageForFetch} étape${stageForFetch > 1 ? 's' : ''}`;
 
-    // Maillots portés à ce stade (yellow/green/polka/white) — uniquement
-    // pertinent pour le classement général, jamais pour les équipes.
+    // Maillots portés à ce stade (yellow/green/polka/white) — utile pour le
+    // classement général (qui les porte) ET pour le classement par équipes
+    // (quelle équipe compte un porteur parmi ses coureurs).
     let jerseysByRider = {};
-    if (type === 'general') {
-      const jerseyDoc = await fetchJerseyWearersDoc(competitionId, stageForFetch);
-      (jerseyDoc && jerseyDoc.jerseyWearers ? jerseyDoc.jerseyWearers : []).forEach(jw => {
-        const iconKey = JERSEY_TYPE_TO_ICON[jw.jerseyType];
-        if (!iconKey || !jw.wearerId) return;
-        if (!jerseysByRider[jw.wearerId]) jerseysByRider[jw.wearerId] = [];
-        jerseysByRider[jw.wearerId].push(iconKey);
-      });
-    }
+    let jerseysByTeam = {};
+    const jerseyDoc = await fetchJerseyWearersDoc(competitionId, stageForFetch);
+    (jerseyDoc && jerseyDoc.jerseyWearers ? jerseyDoc.jerseyWearers : []).forEach(jw => {
+      const iconKey = JERSEY_TYPE_TO_ICON[jw.jerseyType];
+      if (!iconKey || !jw.wearerId) return;
+      if (!jerseysByRider[jw.wearerId]) jerseysByRider[jw.wearerId] = [];
+      jerseysByRider[jw.wearerId].push(iconKey);
+
+      const wearerTeamName = resolveRiderDisplay(jw.wearerId).teamName;
+      const wearerTeamEntry = wearerTeamName ? findRealTeamJersey(wearerTeamName) : null;
+      if (wearerTeamEntry) {
+        if (!jerseysByTeam[wearerTeamEntry.id]) jerseysByTeam[wearerTeamEntry.id] = [];
+        jerseysByTeam[wearerTeamEntry.id].push(iconKey);
+      }
+    });
 
     contentEl.innerHTML = doc.standings.slice().sort((a, b) => a.rank - b.rank).map(s => {
       if (type === 'teams') {
         const team = resolveTeamDisplay(s.teamId);
+        const teamJerseysHtml = (jerseysByTeam[s.teamId] || []).map(iconKey => jerseyIconHtml(iconKey, 18)).join('');
+        const teamLogoHtml = team.jersey && team.jersey.url
+          ? `<img src="${team.jersey.url}" alt="" style="width:22px; height:22px; object-fit:contain; border-radius:4px; flex-shrink:0;">`
+          : '';
         return `<div class="team-rider">
-          <div class="rname"><span class="bib-badge">#${s.rank}</span>${team.name}</div>
+          <div class="rname" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;"><span class="bib-badge">#${s.rank}</span>${teamLogoHtml}${team.name}${teamJerseysHtml}</div>
           <div class="pick-count">${s.time || ''}</div>
         </div>`;
       }
