@@ -647,6 +647,8 @@
   }
   .stage-chip.done { border-color: var(--vert); color: var(--vert); }
   .stage-chip.has-results { border-color: var(--vert); color: var(--vert); background: rgba(46,160,67,0.12); }
+  .stage-chip.today { border-color: var(--jaune-deep); color: var(--jaune-deep); box-shadow: inset 0 0 0 1px var(--jaune-deep); }
+  .stage-chip.pending-results { border-color: var(--polka); color: var(--polka); border-style: dashed; }
   .stage-chip.active { background: var(--jaune); color: var(--asphalt); border-color: var(--jaune); }
 
   .pick-row-wrap {
@@ -7562,18 +7564,41 @@ async function ensureStageResultsCache(elId, onSelect) {
   if (currentCompetition && currentCompetition.id === competitionId) renderStagePicker(elId, onSelect);
 }
 
+/** Date locale "YYYY-MM-DD" — jamais UTC, pour ne pas faire sauter le jour d'une étape près de minuit selon le fuseau du lecteur. */
+function localDateStr(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+/** Date (locale) de l'étape, dérivée de son horaire de clôture des pronostics — seule source de date déjà disponible côté client. */
+function stageLocalDateStr(stageNumber) {
+  const deadline = CONFIG.stageDeadlines && CONFIG.stageDeadlines[String(stageNumber)];
+  return deadline ? localDateStr(new Date(deadline)) : null;
+}
+
 function renderStagePicker(elId, onSelect) {
   const last = lastCompleteStage();
   const target = last + 1 <= TOTAL_STAGES ? last + 1 : TOTAL_STAGES;
   if (selectedStage === null) selectedStage = target;
   const el = document.getElementById(elId);
   const resultsCache = (currentCompetition && STAGE_HAS_RESULTS_CACHE[currentCompetition.id]) || {};
+  const todayStr = localDateStr(new Date());
   el.innerHTML = '';
   for (let s = 1; s <= TOTAL_STAGES; s++) {
     const chip = document.createElement('button');
+    const hasResults = resultsCache[s] === true;
+    const stageDate = stageLocalDateStr(s);
+    const isToday = stageDate === todayStr;
+    const isPastDate = stageDate ? stageDate < todayStr : false;
+
+    // Priorité d'affichage : résultat disponible (vert) > étape du jour (jaune) >
+    // date passée mais résultat pas encore importé (orange, en attente) > à venir (neutre).
+    let stateClass = '';
+    if (hasResults) stateClass = ' has-results';
+    else if (isToday) stateClass = ' today';
+    else if (isPastDate) stateClass = ' pending-results';
+
     chip.className = 'stage-chip'
       + (s <= last ? ' done' : '')
-      + (resultsCache[s] === true ? ' has-results' : '')
+      + stateClass
       + (s === selectedStage ? ' active' : '');
     chip.textContent = s;
     chip.onclick = () => { selectedStage = s; onSelect(); };
