@@ -73,16 +73,48 @@ async function closeBrowser() {
   }
 }
 
+/** Dérive l'URL d'accueil de la course à partir de n'importe quelle URL de page profonde (résultat, classement, startlist...). */
+function deriveRaceHomeUrl(targetUrl) {
+  try {
+    const u = new URL(targetUrl);
+    const parts = u.pathname.split('/').filter(Boolean); // ['race', slug, année, ...]
+    if (parts.length >= 3 && parts[0] === 'race') {
+      return `${u.origin}/race/${parts[1]}/${parts[2]}`;
+    }
+  } catch (e) { /* URL non reconnue -> pas d'échauffement possible, on continue sans */ }
+  return null;
+}
+
 /**
- * @param {{ waitForSelector?: string, timeoutMs?: number, userAgent?: string, delayMs?: number }} options
+ * @param {{ waitForSelector?: string, timeoutMs?: number, userAgent?: string, delayMs?: number, warmUp?: boolean }} options
  * @returns {(url: string, fetchOptions?: object) => Promise<{ ok: boolean, status: number, text: () => Promise<string> }>}
  */
-function createBrowserFetch({ waitForSelector: defaultWaitForSelector = 'table.results', timeoutMs = 30000, userAgent, delayMs = 4000 } = {}) {
+function createBrowserFetch({ waitForSelector: defaultWaitForSelector = 'table.results', timeoutMs = 30000, userAgent, delayMs = 4000, warmUp = true } = {}) {
   let callCount = 0;
+  let warmedUp = false;
 
   return async function browserFetchImpl(url, fetchOptions = {}) {
     const waitForSelector = fetchOptions.waitForSelector || defaultWaitForSelector;
     const ua = userAgent || (fetchOptions.headers && fetchOptions.headers['User-Agent']);
+    const page = await getPage(ua);
+
+    // Échauffement de session (UNE seule fois) : un vrai visiteur charge
+    // d'abord une page d'ensemble avant d'arriver sur une URL profonde —
+    // partir directement sur `stage-17/result/result` sans jamais avoir
+    // "vu" la course peut être un signal de plus pour la détection anti-bot.
+    if (warmUp && !warmedUp) {
+      warmedUp = true;
+      const homeUrl = deriveRaceHomeUrl(url);
+      if (homeUrl && homeUrl !== url) {
+        console.log(`[DIAG] échauffement de session : visite de ${homeUrl} avant la page ciblée`);
+        try {
+          await page.goto(homeUrl, { waitUntil: 'networkidle0', timeout: timeoutMs });
+          await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1500)); // pause de lecture, comme un vrai visiteur
+        } catch (e) {
+          console.log(`[DIAG] échauffement échoué (${e.message}) — on tente quand même la page ciblée`);
+        }
+      }
+    }
 
     // Délai avant chaque requête sauf la toute première de la session —
     // espace les navigations pour ne pas ressembler à un enchaînement
@@ -91,8 +123,6 @@ function createBrowserFetch({ waitForSelector: defaultWaitForSelector = 'table.r
       await new Promise(resolve => setTimeout(resolve, delayMs));
     }
     callCount++;
-
-    const page = await getPage(ua);
 
     // Diagnostic temporaire : voir ce qui se passe réellement dans le
     // navigateur pendant ce run — erreurs JS, requêtes échouées —
