@@ -8331,6 +8331,58 @@ function riderEntryMatches(line, entry) {
   return false;
 }
 
+/**
+ * Reconstruit la correspondance "libellé RIDERS" -> pcsSlug, avec EXACTEMENT
+ * la même règle de nommage que regenerateRidersFromTeams() (nom seul, ou
+ * "nom prénom" en cas d'homonymie) — indispensable pour relier une entrée
+ * reconnue dans le texte collé (clé = ce même libellé normalisé) à
+ * l'identifiant utilisé par le reste de l'app (stageResults, classements).
+ */
+function buildRiderLabelToPcsSlugMap() {
+  const counts = {};
+  CONFIG.teams.forEach(t => t.riders.forEach(r => { counts[r.surname] = (counts[r.surname] || 0) + 1; }));
+  const map = {};
+  CONFIG.teams.forEach(t => t.riders.forEach(r => {
+    if (!r.pcsSlug) return; // coureur jamais rattaché à un pcsSlug connu -> ne peut pas être reconstruit ici, volontairement ignoré plutôt qu'un identifiant inventé
+    const label = counts[r.surname] > 1 ? `${r.surname} ${r.first}` : r.surname;
+    map[norm(label)] = r.pcsSlug;
+  }));
+  return map;
+}
+
+/**
+ * Persiste un stageResults/{s} à partir des rangs déjà reconnus dans le texte
+ * collé — EXACTEMENT le même format que l'import PCS automatique
+ * (results/StageResultAssembler), pour que "Résultats > Étapes" affiche cette
+ * étape sans code de lecture séparé. `source: 'collage-manuel'` distingue
+ * explicitement cette origine — jamais confondu avec un import automatique.
+ * Un coureur reconnu dans le texte mais sans pcsSlug connu est simplement
+ * omis (pas de classement partiel silencieusement faux).
+ */
+async function persistManualStageResults(stageNumber, riderRank) {
+  if (!db || !currentCompetition || !currentCompetition.id) return { written: 0, skipped: 0 };
+  const labelToSlug = buildRiderLabelToPcsSlugMap();
+  const results = [];
+  let skipped = 0;
+  Object.keys(riderRank).forEach(fullNorm => {
+    const pcsSlug = labelToSlug[fullNorm];
+    if (!pcsSlug) { skipped++; return; }
+    results.push({ rank: riderRank[fullNorm], riderId: pcsSlug, time: null, gap: null, pcsRawStatus: null });
+  });
+  if (results.length === 0) return { written: 0, skipped };
+  try {
+    await db.collection('competitions').doc(currentCompetition.id).collection('stageResults').doc(String(stageNumber)).set({
+      results,
+      lastSynced: new Date().toISOString(),
+      source: 'collage-manuel'
+    });
+  } catch (e) {
+    console.error('persistManualStageResults error', e);
+    return { written: 0, skipped, error: true };
+  }
+  return { written: results.length, skipped };
+}
+
 function parseAndApply(text) {
   const s = String(selectedStage);
   const lines = text.split('\n');
@@ -8386,6 +8438,21 @@ function parseAndApply(text) {
   const foundCount = Object.keys(riderRank).length;
   const logLines = [`${foundCount} coureur(s) reconnu(s) dans le texte collé.`, ''];
   let updated = 0;
+
+  // Reconstruit aussi "Résultats > Étapes" pour cette étape, dans le même
+  // format qu'un import automatique — indépendant du calcul des points de
+  // pronostic ci-dessous, ne bloque jamais l'affichage du log de scoring.
+  persistManualStageResults(parseInt(s, 10), riderRank).then(({ written, skipped, error }) => {
+    const note = document.createElement('div');
+    if (error) {
+      note.innerHTML = `⚠️ Résultats > Étapes : échec de l'enregistrement — voir la console.`;
+    } else if (written > 0) {
+      note.innerHTML = `📊 Résultats > Étapes mis à jour avec ${written} coureur(s)${skipped > 0 ? ` (${skipped} ignoré(s), pcsSlug inconnu)` : ''}.`;
+    } else {
+      note.innerHTML = `⚠️ Résultats > Étapes non mis à jour — aucun des coureurs reconnus n'a de pcsSlug connu (roster pas encore importé pour cette compétition ?).`;
+    }
+    document.getElementById('logBox').appendChild(note);
+  });
 
   STATE.players.forEach(p => {
     const d = STATE.data[p] && STATE.data[p][s];
@@ -9311,7 +9378,6 @@ async function renderResultatsContent() {
 
   contentEl.innerHTML = resultatsEmptyState('Chargement…');
   const competitionId = currentCompetition.id;
-
   if (resultatsMode === 'etapes') {
     const doc = await fetchStageResultsDoc(competitionId, stageForFetch);
     if (!doc || !doc.results || doc.results.length === 0) {
@@ -9329,20 +9395,31 @@ async function renderResultatsContent() {
 
   } else {
     const type = resultatsMode === 'equipes' ? 'teams' : 'general';
-    const doc = await fetchClassificationDoc(competitionId, stageForFetch, type);
+    // Repli : si l'étape "validée" la plus récente (côté pronostics) n'a pas
+    // encore de classement PCS réellement importé (ex : import en échec
+    // temporaire alors que l'étape a déjà été saisie/validée), on redescend
+    // vers la dernière étape pour laquelle un classement existe vraiment —
+    // jamais un écran vide alors qu'un classement récent est disponible.
+    let effectiveStage = stageForFetch;
+    let doc = await fetchClassificationDoc(competitionId, effectiveStage, type);
+    while ((!doc || !doc.standings || doc.standings.length === 0) && effectiveStage > 1) {
+      effectiveStage -= 1;
+      doc = await fetchClassificationDoc(competitionId, effectiveStage, type);
+    }
     if (!doc || !doc.standings || doc.standings.length === 0) {
       contentEl.innerHTML = resultatsEmptyState(`Classement pas encore importé pour l'étape ${stageForFetch}.`);
       return;
     }
     const label = resultatsMode === 'equipes' ? 'Classement par équipes' : 'Classement général';
-    metaEl.textContent = doc.lastSynced ? `${label} après ${stageForFetch} étape${stageForFetch > 1 ? 's' : ''} · mis à jour : ${new Date(doc.lastSynced).toLocaleString('fr-FR')}` : `${label} après ${stageForFetch} étape${stageForFetch > 1 ? 's' : ''}`;
+    const staleNote = effectiveStage !== stageForFetch ? ` (dernier classement disponible — import de l'étape ${stageForFetch} en attente)` : '';
+    metaEl.textContent = (doc.lastSynced ? `${label} après ${effectiveStage} étape${effectiveStage > 1 ? 's' : ''} · mis à jour : ${new Date(doc.lastSynced).toLocaleString('fr-FR')}` : `${label} après ${effectiveStage} étape${effectiveStage > 1 ? 's' : ''}`) + staleNote;
 
     // Maillots portés à ce stade (yellow/green/polka/white) — utile pour le
     // classement général (qui les porte) ET pour le classement par équipes
     // (quelle équipe compte un porteur parmi ses coureurs).
     let jerseysByRider = {};
     let jerseysByTeam = {};
-    const jerseyDoc = await fetchJerseyWearersDoc(competitionId, stageForFetch);
+    const jerseyDoc = await fetchJerseyWearersDoc(competitionId, effectiveStage);
     (jerseyDoc && jerseyDoc.jerseyWearers ? jerseyDoc.jerseyWearers : []).forEach(jw => {
       const iconKey = JERSEY_TYPE_TO_ICON[jw.jerseyType];
       if (!iconKey || !jw.wearerId) return;
