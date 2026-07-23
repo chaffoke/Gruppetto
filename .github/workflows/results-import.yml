@@ -33,6 +33,10 @@ on:
   schedule:
     - cron: '*/15 13-18 * * *'
 
+permissions:
+  actions: write   # nécessaire pour que le job puisse déclencher son propre re-lancement (gh run rerun)
+  contents: read
+
 jobs:
   results-import:
     runs-on: ubuntu-latest
@@ -65,3 +69,16 @@ jobs:
           PCS_RACE_SLUG: ${{ inputs.pcsRaceSlug || 'tour-de-france' }}
           PCS_RACE_YEAR: ${{ inputs.pcsRaceYear || '2026' }}
         run: node run.js
+
+      # Un échec (souvent un 403 PCS lié à l'IP du runner, pas à notre code)
+      # a de vraies chances de passer sur une NOUVELLE tentative : chaque
+      # rejeu provisionne un runner tout neuf, avec une adresse IP
+      # différente. Limité à 3 tentatives au total (github.run_attempt) pour
+      # ne jamais boucler indéfiniment — au-delà, on laisse le prochain
+      # passage programmé (15 min plus tard) réessayer plutôt que de
+      # s'acharner dans la même fenêtre.
+      - name: Re-lancer automatiquement en cas d'échec (nouvelle IP à chaque tentative)
+        if: failure() && fromJSON(github.run_attempt) < 3
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh run rerun ${{ github.run_id }} --failed
