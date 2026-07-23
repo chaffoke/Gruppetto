@@ -33,52 +33,46 @@ on:
   schedule:
     - cron: '*/15 13-18 * * *'
 
-permissions:
-  actions: write   # nécessaire pour que le job puisse déclencher son propre re-lancement (gh run rerun)
-  contents: read
-
+# Un échec (souvent un 403 PCS lié à l'IP du runner, pas à notre code) a
+# de vraies chances de passer sur une NOUVELLE tentative : chaque JOB
+# provisionne un runner tout neuf, avec une adresse IP différente.
+# Limité à 3 tentatives au total — au-delà, on laisse le prochain
+# passage programmé (15 min plus tard) réessayer plutôt que de
+# s'acharner dans la même fenêtre.
+#
+# ⚠️ Ne PAS revenir à un `gh run rerun` sur soi-même : ça échoue
+# structurellement ("run cannot be rerun; already running"), un run ne
+# peut pas se relancer tant qu'il n'est pas terminé. Des JOBS séparés,
+# chaînés par `needs`/`if: failure()`, sont la bonne façon d'obtenir
+# plusieurs runners/IP différents au sein d'un même déclenchement.
 jobs:
-  results-import:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: results
-    steps:
-      - uses: actions/checkout@v4
+  attempt-1:
+    uses: ./.github/workflows/_results-import-attempt.yml
+    with:
+      competitionId: ${{ inputs.competitionId || 'tdf-2026' }}
+      stageNumber: ${{ inputs.stageNumber || '' }}
+      pcsRaceSlug: ${{ inputs.pcsRaceSlug || 'tour-de-france' }}
+      pcsRaceYear: ${{ inputs.pcsRaceYear || '2026' }}
+    secrets: inherit
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+  attempt-2:
+    needs: attempt-1
+    if: failure()
+    uses: ./.github/workflows/_results-import-attempt.yml
+    with:
+      competitionId: ${{ inputs.competitionId || 'tdf-2026' }}
+      stageNumber: ${{ inputs.stageNumber || '' }}
+      pcsRaceSlug: ${{ inputs.pcsRaceSlug || 'tour-de-france' }}
+      pcsRaceYear: ${{ inputs.pcsRaceYear || '2026' }}
+    secrets: inherit
 
-      - name: Installer les dépendances
-        run: npm install
-
-      - name: Bibliothèques système pour Chromium (Puppeteer)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
-            libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
-            libgbm1 libasound2t64 libpango-1.0-0 libcairo2
-
-      - name: Lancer l'import des résultats d'étape
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          COMPETITION_ID: ${{ inputs.competitionId || 'tdf-2026' }}
-          STAGE_NUMBER: ${{ inputs.stageNumber || '' }}
-          PCS_RACE_SLUG: ${{ inputs.pcsRaceSlug || 'tour-de-france' }}
-          PCS_RACE_YEAR: ${{ inputs.pcsRaceYear || '2026' }}
-        run: node run.js
-
-      # Un échec (souvent un 403 PCS lié à l'IP du runner, pas à notre code)
-      # a de vraies chances de passer sur une NOUVELLE tentative : chaque
-      # rejeu provisionne un runner tout neuf, avec une adresse IP
-      # différente. Limité à 3 tentatives au total (github.run_attempt) pour
-      # ne jamais boucler indéfiniment — au-delà, on laisse le prochain
-      # passage programmé (15 min plus tard) réessayer plutôt que de
-      # s'acharner dans la même fenêtre.
-      - name: Re-lancer automatiquement en cas d'échec (nouvelle IP à chaque tentative)
-        if: failure() && fromJSON(github.run_attempt) < 3
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh run rerun ${{ github.run_id }} --failed
+  attempt-3:
+    needs: attempt-2
+    if: failure()
+    uses: ./.github/workflows/_results-import-attempt.yml
+    with:
+      competitionId: ${{ inputs.competitionId || 'tdf-2026' }}
+      stageNumber: ${{ inputs.stageNumber || '' }}
+      pcsRaceSlug: ${{ inputs.pcsRaceSlug || 'tour-de-france' }}
+      pcsRaceYear: ${{ inputs.pcsRaceYear || '2026' }}
+    secrets: inherit

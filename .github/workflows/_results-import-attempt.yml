@@ -1,0 +1,60 @@
+name: (interne) Une tentative d'import des résultats
+
+# Workflow réutilisable, jamais déclenché seul — appelé par
+# results-import.yml, plusieurs fois de suite si besoin. Chaque appel
+# provisionne un JOB séparé, donc un runner tout neuf avec sa propre
+# adresse IP — c'est ça qui donne une vraie chance de contourner un 403
+# lié à l'IP, contrairement à un rejeu de soi-même (`gh run rerun`), qui
+# échoue structurellement tant que le run n'est pas terminé.
+
+on:
+  workflow_call:
+    inputs:
+      competitionId:
+        required: true
+        type: string
+      stageNumber:
+        required: true
+        type: string
+      pcsRaceSlug:
+        required: true
+        type: string
+      pcsRaceYear:
+        required: true
+        type: string
+    secrets:
+      FIREBASE_SERVICE_ACCOUNT:
+        required: true
+
+jobs:
+  attempt:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: results
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Installer les dépendances
+        run: npm install
+
+      - name: Bibliothèques système pour Chromium (Puppeteer)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+            libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+            libgbm1 libasound2t64 libpango-1.0-0 libcairo2
+
+      - name: Lancer l'import des résultats d'étape
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          COMPETITION_ID: ${{ inputs.competitionId }}
+          STAGE_NUMBER: ${{ inputs.stageNumber }}
+          PCS_RACE_SLUG: ${{ inputs.pcsRaceSlug }}
+          PCS_RACE_YEAR: ${{ inputs.pcsRaceYear }}
+        run: node run.js

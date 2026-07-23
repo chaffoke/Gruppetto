@@ -20,49 +20,28 @@ on:
         required: false
         default: 'tour-de-france/2026'
 
-permissions:
-  actions: write   # nécessaire pour que le job puisse déclencher son propre re-lancement (gh run rerun)
-  contents: read
-
+# Limité à UNE seule tentative supplémentaire (2 jobs au total) — les
+# échecs répétés de ces derniers jours montrent que retenter plus ne
+# ferait que multiplier les notifications sans rien résoudre de plus
+# qu'une seule reprise.
+#
+# ⚠️ Ne PAS revenir à un `gh run rerun` sur soi-même : ça échoue
+# structurellement ("run cannot be rerun; already running"). Des JOBS
+# séparés, chaînés par `needs`/`if: failure()`, sont la bonne façon
+# d'obtenir un runner/IP différent au sein d'un même déclenchement.
 jobs:
-  sync:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: sync
-    steps:
-      - uses: actions/checkout@v4
+  attempt-1:
+    uses: ./.github/workflows/_sync-riders-attempt.yml
+    with:
+      raceId: ${{ inputs.raceId || 'tour-de-france/2026' }}
+      competitionId: 'tdf-2026'
+    secrets: inherit
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Installer les dépendances
-        run: npm install
-
-      - name: Bibliothèques système pour Chromium (Puppeteer)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
-            libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
-            libgbm1 libasound2t64 libpango-1.0-0 libcairo2
-
-      - name: Lancer la synchronisation
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          SYNC_RACE_ID: ${{ inputs.raceId || 'tour-de-france/2026' }}
-          COMPETITION_ID: 'tdf-2026'
-        run: node run.js
-
-      # Même logique que results-import.yml : un 403 est souvent lié à
-      # l'IP du runner, pas au code — une nouvelle tentative provisionne un
-      # runner neuf avec une IP différente. Limité à UNE seule tentative
-      # supplémentaire (2 au total) — les échecs répétés de ces derniers
-      # jours montrent que retenter 3 fois ne fait surtout que multiplier
-      # les notifications sans rien résoudre de plus qu'une seule reprise.
-      - name: Re-lancer automatiquement en cas d'échec (nouvelle IP à chaque tentative)
-        if: failure() && fromJSON(github.run_attempt) < 2
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh run rerun ${{ github.run_id }} --failed
+  attempt-2:
+    needs: attempt-1
+    if: failure()
+    uses: ./.github/workflows/_sync-riders-attempt.yml
+    with:
+      raceId: ${{ inputs.raceId || 'tour-de-france/2026' }}
+      competitionId: 'tdf-2026'
+    secrets: inherit

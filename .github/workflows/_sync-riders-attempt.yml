@@ -1,0 +1,49 @@
+name: (interne) Une tentative de synchronisation des coureurs
+
+# Workflow réutilisable, jamais déclenché seul — appelé par
+# sync-riders.yml. Même principe que _results-import-attempt.yml : un
+# JOB séparé par tentative = un runner neuf = une IP différente.
+
+on:
+  workflow_call:
+    inputs:
+      raceId:
+        required: true
+        type: string
+      competitionId:
+        required: true
+        type: string
+    secrets:
+      FIREBASE_SERVICE_ACCOUNT:
+        required: true
+
+jobs:
+  attempt:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sync
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Installer les dépendances
+        run: npm install
+
+      - name: Bibliothèques système pour Chromium (Puppeteer)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+            libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+            libgbm1 libasound2t64 libpango-1.0-0 libcairo2
+
+      - name: Lancer la synchronisation
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SYNC_RACE_ID: ${{ inputs.raceId }}
+          COMPETITION_ID: ${{ inputs.competitionId }}
+        run: node run.js
