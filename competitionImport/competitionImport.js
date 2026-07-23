@@ -21,6 +21,7 @@ const { mapStageType } = require('./providers/StageTypeMapper');
 const { validateCompetitionInfo, validateStageList, validateStageTime } = require('./competitionImportValidation');
 const { assembleFavorites } = require('./assemblers/FavoritesAssembler');
 const { assembleTeams } = require('./assemblers/TeamAssembler');
+const { downloadJerseyDataUri } = require('./jerseyImageDownloader');
 
 function providerLabel(provider) {
   return provider ? (provider.name || 'unknown') : null;
@@ -88,6 +89,7 @@ async function runCompetitionImport({
   stageTimeProvider = null,
   favoritesProvider = null,
   teamJerseyProvider = null,
+  jerseyImageFetchImpl = null,
   resolveRiderId,
   resolveTeamId,
   repository,
@@ -133,12 +135,27 @@ async function runCompetitionImport({
     try {
       const rawTeams = await teamJerseyProvider.fetchTeamJerseys();
       const teams = assembleTeams(rawTeams, { resolveTeamId });
+      let imagesDownloaded = 0;
       for (const team of teams) {
+        // Image téléchargée côté serveur (contourne l'anti-hotlink PCS côté
+        // navigateur) et stockée en data URI — jamais bloquant : un échec
+        // sur UNE image garde simplement `jersey.url` en repli, n'empêche
+        // jamais l'import du reste des équipes.
+        if (team.jersey && team.jersey.url) {
+          try {
+            team.jersey.dataUri = await downloadJerseyDataUri(team.jersey.url, jerseyImageFetchImpl ? { fetchImpl: jerseyImageFetchImpl } : {});
+            imagesDownloaded++;
+          } catch (err) {
+            const w = `Image du maillot non téléchargée pour ${team.name} : ${err.message}`;
+            report.warnings.push(w);
+            log(`⚠ ${w}`);
+          }
+        }
         await repository.writeTeam(competitionId, team.id, team);
       }
       report.sections.teams.success = true;
       report.sections.teams.count = teams.length;
-      log(`✓ Teams importés (${teams.length})`);
+      log(`✓ Teams importés (${teams.length}), ${imagesDownloaded} image(s) de maillot téléchargée(s)`);
     } catch (err) {
       report.sections.teams.error = err.message;
       report.warnings.push(`Teams non importés : ${err.message}`);
@@ -236,6 +253,23 @@ async function runCompetitionImport({
 
       for (const stage of stagesWithStartTime) {
         const stageType = mapStageType({ pcsStageType: stage.pcsStageType, stageName: stage.name });
+
+        // Même mécanisme que les maillots d'équipe (downloadJerseyDataUri est
+        // générique malgré son nom — télécharge n'importe quelle image en data
+        // URI) : l'image de profil d'étape est elle aussi hébergée directement
+        // chez PCS et soumise au même anti-hotlink. Jamais bloquant : un échec
+        // garde simplement pcsProfileUrl en repli.
+        let pcsProfileDataUri = null;
+        if (stage.pcsProfileUrl) {
+          try {
+            pcsProfileDataUri = await downloadJerseyDataUri(stage.pcsProfileUrl, {});
+          } catch (err) {
+            const w = `Image de profil non téléchargée pour l'étape ${stage.stageNumber} : ${err.message}`;
+            report.warnings.push(w);
+            log(`⚠ ${w}`);
+          }
+        }
+
         await repository.writeStage(competitionId, stage.stageNumber, {
           stageNumber: stage.stageNumber,
           name: stage.name || null,
@@ -250,6 +284,7 @@ async function runCompetitionImport({
           pcsStageType: stage.pcsStageType || null,
           profileScore: stage.profileScore != null ? stage.profileScore : null,
           pcsProfileUrl: stage.pcsProfileUrl || null,
+          pcsProfileDataUri,
           pcsStageUrl: stage.pcsStageUrl || null,
           extra: stage.extra || {}
         });
